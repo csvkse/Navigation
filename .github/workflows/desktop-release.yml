@@ -18,9 +18,21 @@ jobs:
             rid: win-x64
             target_name: Windows x64
             archive_ext: zip
+          - os: windows-latest
+            rid: win-arm64
+            target_name: Windows ARM64
+            archive_ext: zip
           - os: ubuntu-latest
             rid: linux-x64
             target_name: Linux x64
+            archive_ext: tar.gz
+          - os: ubuntu-latest
+            rid: linux-arm
+            target_name: Linux ARMv7
+            archive_ext: tar.gz
+          - os: ubuntu-latest
+            rid: linux-arm64
+            target_name: Linux ARM64
             archive_ext: tar.gz
           - os: macos-latest
             rid: osx-arm64
