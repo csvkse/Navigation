@@ -1,24 +1,10 @@
-# Navigation
+﻿# Navigation
 
-[**English Version**](README-en.md) | [**简体中文版**](README.md)
+[**English Version**](README-en.md) | [**ç®€ä½“ä¸­æ–‡ç‰ˆ**](README.md)
 
 ## Introduction
 
-Navigation is a lightweight navigation and bookmark management project built with .NET 10 (AOT) + Vue 3 (Vite SSG). The backend uses ASP.NET Core with an SQLite database and integrates Scalar to provide an elegant OpenAPI interface. The frontend is built with Tailwind CSS and Reka UI, offering a smooth, modern interactive experience.
-
-## Interface Preview
-
-### Desktop Preview
-
-![Desktop Preview 1](./Navigation.Frontend/preview/1.png)
-![Desktop Preview 2](./Navigation.Frontend/preview/2.png)
-![Desktop Preview 3](./Navigation.Frontend/preview/3.png)
-
-### Mobile Preview
-
-<div align="center">
-  <img src="./Navigation.Frontend/preview/100.png" width="375" alt="Mobile Preview" />
-</div>
+Navigation is a lightweight navigation and bookmark management project built with .NET 10 (AOT) + Vue 3 (Vite SSG). The backend uses ASP.NET Core with an SQLite database and integrates Scalar to provide an elegant OpenAPI interface. The frontend is built with Tailwind CSS and ReKa UI, offering a smooth, modern interactive experience.
 
 ## Usage
 
@@ -76,15 +62,15 @@ The project uses GitHub Actions for automated continuous integration and deploym
 
 ```text
 Navigation/
-├── .github/          # GitHub Actions CI/CD automation workflow configurations
-├── Navigation/       # Backend project code (.NET 10 ASP.NET Core Web API)
-│   ├── Navigation.csproj  # Backend project configuration, containing MSBuild tasks for automatic building and publishing of frontend resources
-│   ├── wwwroot/      # Final frontend static site artifacts and serving directory
-│   └── Dockerfile    # Dockerfile for multi-architecture container builds
-├── Navigation.Frontend/   # Frontend client project (Vue 3, TypeScript, Vite)
-│   ├── src/          # Core page view components (e.g., WebNav.vue) and frontend interaction logic
-│   ├── package.json  # Frontend dependency configurations and Vite build scripts
-│   └── tsconfig.app.json  # TypeScript compilation configuration
-├── README.md         # Project documentation (Chinese)
-└── README-en.md      # Project documentation (English)
+â”œâ”€â”€ .github/          # GitHub Actions CI/CD automation workflow configurations
+â”œâ”€â”€ Navigation/       # Backend project code (.NET 10 ASP.NET Core Web API)
+â”‚   â”œâ”€â”€ Navigation.csproj  # Backend project configuration, containing MSBuild tasks for automatic building and publishing of frontend resources
+â”‚   â”œâ”€â”€ wwwroot/      # Final frontend static site artifacts and serving directory
+â”‚   â””â”€â”€ Dockerfile    # Dockerfile for multi-architecture container builds
+â”œâ”€â”€ Navigation.Frontend/   # Frontend client project (Vue 3, TypeScript, Vite)
+â”‚   â”œâ”€â”€ src/          # Core page view components (e.g., WebNav.vue) and frontend interaction logic
+â”‚   â”œâ”€â”€ package.json  # Frontend dependency configurations and Vite build scripts
+â”‚   â””â”€â”€ tsconfig.app.json  # TypeScript compilation configuration
+â”œâ”€â”€ README.md         # Project documentation (Chinese)
+â””â”€â”€ README-en.md      # Project documentation (English)
 ```
