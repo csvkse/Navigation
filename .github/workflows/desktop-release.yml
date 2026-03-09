@@ -25,19 +25,12 @@ jobs:
             target_name: Windows ARM64
             archive_ext: zip
 
-          # Linux
+          # Linux (只保留 x64)
           - os: ubuntu-latest
             rid: linux-x64
             target_name: Linux x64
             archive_ext: tar.gz
-          - os: ubuntu-latest
-            rid: linux-arm
-            target_name: Linux ARMv7
-            archive_ext: tar.gz
-          - os: ubuntu-latest
-            rid: linux-arm64
-            target_name: Linux ARM64
-            archive_ext: tar.gz
+          # Linux ARMv7 和 ARM64 已取消
 
           # macOS
           - os: macos-latest
@@ -60,79 +53,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang zlib1g-dev
 
-      # Linux ARMv7 (linux-arm) 平台下的交叉编译依赖包
-      - name: Install Linux dependencies (ARMv7)
-        if: matrix.os == 'ubuntu-latest' && matrix.rid == 'linux-arm'
-        run: |
-          # 添加 ARMHF 架构
-          sudo dpkg --add-architecture armhf
-
-          # 备份原 sources.list
-          sudo cp /etc/apt/sources.list /etc/apt/sources.list.bak
-
-          # 创建新的 amd64 主源配置
-          sudo bash -c 'cat > /etc/apt/sources.list << EOF
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
-          deb [arch=amd64] http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
-          EOF'
-
-          # 创建 ARMHF 源配置文件
-          sudo bash -c 'cat > /etc/apt/sources.list.d/armhf.list << EOF
-          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
-          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
-          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
-          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
-          EOF'
-
-          # 更新包列表
-          sudo apt-get update
-
-          # 安装交叉编译工具链和依赖
-          sudo apt-get install -y \
-            clang \
-            gcc-arm-linux-gnueabihf \
-            binutils-arm-linux-gnueabihf \
-            zlib1g-dev:armhf \
-            libc6-dev:armhf
-
-      # Linux ARM64 (linux-arm64) 平台下的交叉编译依赖包
-      - name: Install Linux dependencies (ARM64)
-        if: matrix.os == 'ubuntu-latest' && matrix.rid == 'linux-arm64'
-        run: |
-          # 添加 ARM64 架构
-          sudo dpkg --add-architecture arm64
-
-          # 备份原 sources.list
-          sudo cp /etc/apt/sources.list /etc/apt/sources.list.bak
-
-          # 创建新的 amd64 主源配置
-          sudo bash -c 'cat > /etc/apt/sources.list << EOF
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
-          deb [arch=amd64] http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
-          EOF'
-
-          # 创建 ARM64 源配置文件
-          sudo bash -c 'cat > /etc/apt/sources.list.d/arm64.list << EOF
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
-          EOF'
-
-          # 更新包列表
-          sudo apt-get update
-
-          # 安装交叉编译工具链和依赖
-          sudo apt-get install -y \
-            clang \
-            gcc-aarch64-linux-gnu \
-            binutils-aarch64-linux-gnu \
-            zlib1g-dev:arm64 \
-            libc6-dev:arm64
+      # Linux ARM 依赖安装步骤已全部移除
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
