@@ -153,7 +153,7 @@ interface LinkRecord {
     content: LinkContent
 }
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 const STATIC_SALT = 'webnav_an_v1_920930589'
 
 const generateSecureKey = (username: string) => {
@@ -274,6 +274,8 @@ const initFromCache = () => {
     }
 
     if (keyToUse) {
+        if (keyToUse === defaultKey) return []
+
         const cacheKey = getCacheKey(keyToUse)
         const cached = localStorage.getItem(cacheKey)
         if (cached) {
@@ -286,11 +288,11 @@ const initFromCache = () => {
 }
 
 const links = shallowRef<LinkRecord[]>(initFromCache())
-const loading = ref(links.value.length === 0)
-const isInitialLoading = ref(links.value.length === 0)
+const loading = ref(currentKey.value === defaultKey ? false : links.value.length === 0)
+const isInitialLoading = ref(currentKey.value === defaultKey ? false : links.value.length === 0)
 const appStore = useAppStore()
 
-if (currentKey.value && links.value.length === 0) {
+if (currentKey.value && links.value.length === 0 && currentKey.value !== defaultKey) {
     appStore.globalLoading = true
 }
 
@@ -674,6 +676,17 @@ const safeParse = (content: any): any => {
 const fetchData = async (silent = false) => {
     if (!currentKey.value) return
     const currentKeySnap = currentKey.value
+
+    if (currentKeySnap === defaultKey) {
+        links.value = []
+        loading.value = false
+        isInitialLoading.value = false
+        if (!silent) appStore.globalLoading = false
+        isReadOnly.value = true
+        isManageMode.value = false
+        return
+    }
+
     const cacheKey = getCacheKey(currentKeySnap)
 
     if (links.value.length === 0 && !silent) {
