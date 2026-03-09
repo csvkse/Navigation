@@ -9,6 +9,14 @@
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
   </PropertyGroup>
 
+  <!-- Native AOT Cross-Compilation Linker Settings -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'linux-arm'">
+    <CppLinker>arm-linux-gnueabihf-gcc</CppLinker>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'linux-arm64'">
+    <CppLinker>aarch64-linux-gnu-gcc</CppLinker>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.2" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.3" />

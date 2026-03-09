@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     strategy:
+      fail-fast: false
       matrix:
         include:
           - rid: linux-x64

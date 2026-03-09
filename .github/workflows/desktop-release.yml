@@ -54,6 +54,14 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && matrix.rid == 'linux-arm'
         run: |
           sudo dpkg --add-architecture armhf
+          sudo sed -i 's/^deb/deb [arch=amd64]/g' /etc/apt/sources.list
+          sudo sed -i 's/^deb-src/deb-src [arch=amd64]/g' /etc/apt/sources.list
+          sudo bash -c 'cat > /etc/apt/sources.list.d/armhf.list << EOF
+          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
+          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
+          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
+          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
+          EOF'
           sudo apt-get update
           sudo apt-get install -y clang gcc-arm-linux-gnueabihf zlib1g-dev:armhf
 
@@ -62,6 +70,14 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && matrix.rid == 'linux-arm64'
         run: |
           sudo dpkg --add-architecture arm64
+          sudo sed -i 's/^deb/deb [arch=amd64]/g' /etc/apt/sources.list
+          sudo sed -i 's/^deb-src/deb-src [arch=amd64]/g' /etc/apt/sources.list
+          sudo bash -c 'cat > /etc/apt/sources.list.d/arm64.list << EOF
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
+          EOF'
           sudo apt-get update
           sudo apt-get install -y clang gcc-aarch64-linux-gnu zlib1g-dev:arm64
 
