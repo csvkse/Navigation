@@ -27,7 +27,6 @@ jobs:
             rid: linux-x64
             target_name: Linux x64
             archive_ext: tar.gz
-          # Linux ARM64: 直接使用 GitHub 官方 ARM 原生镜像，免去交叉编译的麻烦，速度更快
           - os: ubuntu-24.04-arm
             rid: linux-arm64
             target_name: Linux ARM64
