@@ -22,10 +22,6 @@ jobs:
             rid: linux-x64
             target_name: Linux x64
             archive_ext: tar.gz
-          - os: macos-13
-            rid: osx-x64
-            target_name: macOS Intel
-            archive_ext: tar.gz
           - os: macos-latest
             rid: osx-arm64
             target_name: macOS Apple Silicon
