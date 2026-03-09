@@ -24,7 +24,7 @@ jobs:
             os: ubuntu-24.04-arm
 
     runs-on: ${{ matrix.os }}
-    # 权限设置
+    # 权限设置：构建阶段通常不需要 packages: write 权限，只需读取代码即可（推送操作由 token 控制）
     permissions:
       contents: read
       packages: write
@@ -35,16 +35,17 @@ jobs:
         if: github.event_name != 'pull_request' || matrix.platform == 'linux/amd64'
         uses: actions/checkout@v4
 
-      # 将仓库名强制转换为小写，防止 Docker 报错
       - name: Set lower case repository name
         if: github.event_name != 'pull_request' || matrix.platform == 'linux/amd64'
         run: echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
 
       - name: Set up Docker Buildx
+        if: github.event_name != 'pull_request' || matrix.platform == 'linux/amd64'
         uses: docker/setup-buildx-action@v3
 
+      # 优化点：PR 测试完全不需要登录镜像仓库
       - name: Log in to the Container registry
-        if: github.event_name != 'pull_request' && (github.event_name != 'pull_request' || matrix.platform == 'linux/amd64')
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -52,6 +53,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata (tags, labels) for Docker
+        if: github.event_name != 'pull_request' || matrix.platform == 'linux/amd64'
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -69,20 +71,18 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=build-${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=build-${{ matrix.platform }}
-          # PR 时完全不推送，Tag 发布时只推送按 Digest 索引的镜像
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ github.event_name != 'pull_request' }}
 
-      # 提取刚才推送镜像的 Sha256 值，作为一个空文件保存
+      # 优化点：简化布尔逻辑。原逻辑 A && (A || B) 直接等价于 A
       - name: Export digest
-        if: github.event_name != 'pull_request' && (github.event_name != 'pull_request' || matrix.platform == 'linux/amd64')
+        if: github.event_name != 'pull_request'
         run: |
           mkdir -p /tmp/digests
           digest="${{ steps.build.outputs.digest }}"
           touch "/tmp/digests/${digest#sha256:}"
 
-      # 将这个文件作为构建产物上传，供合并任务使用
       - name: Upload digest
-        if: github.event_name != 'pull_request' && (github.event_name != 'pull_request' || matrix.platform == 'linux/amd64')
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: digests-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
@@ -94,7 +94,6 @@ jobs:
   merge:
     runs-on: ubuntu-latest
     needs: build
-    # 只有正式发布（非 PR）才执行清单合并
     if: github.event_name != 'pull_request'
     permissions:
       contents: read
@@ -104,7 +103,6 @@ jobs:
       - name: Set lower case repository name
         run: echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
 
-      # 下载前面两个独立任务上传的 Digest 产物，并合并到一个文件夹里
       - name: Download digests
         uses: actions/download-artifact@v4
         with:
@@ -122,7 +120,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 在合并阶段生成最终的标签（例如 v1.0.0, latest）
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v5
@@ -133,7 +130,6 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha,format=short
 
-      # 利用 buildx imagetools 把零散的 Digest 组装成一个多架构镜像
       - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
