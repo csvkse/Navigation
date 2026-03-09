@@ -27,11 +27,13 @@ jobs:
             rid: linux-x64
             target_name: Linux x64
             archive_ext: tar.gz
-          - os: ubuntu-latest
+          # Linux ARMv7: 使用 22.04 以兼容原有的交叉编译源替换逻辑
+          - os: ubuntu-22.04
             rid: linux-arm
             target_name: Linux ARMv7
             archive_ext: tar.gz
-          - os: ubuntu-latest
+          # Linux ARM64: 直接使用 GitHub 官方 ARM 原生镜像，免去交叉编译的麻烦，速度更快
+          - os: ubuntu-24.04-arm
             rid: linux-arm64
             target_name: Linux ARM64
             archive_ext: tar.gz
@@ -44,85 +46,67 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 提取版本号
-      - name: Get version
-        id: get_version
-        run: |
-          if [[ "${{ github.ref_type }}" == "tag" ]]; then
-            echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
-          else
-            echo "VERSION=manual-build-$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
-          fi
-        shell: bash
-
-      # Linux x64 平台下的 NativeAOT 依赖包
+      # 1. Linux x64 平台下的 NativeAOT 依赖包
       - name: Install Linux dependencies (x64)
         if: matrix.os == 'ubuntu-latest' && matrix.rid == 'linux-x64'
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
 
-      # Linux ARM 平台依赖
-      - name: Install Linux ARM dependencies
-        if: matrix.os == 'ubuntu-latest' && (matrix.rid == 'linux-arm' || matrix.rid == 'linux-arm64')
-        run: sudo apt-get update && sudo apt-get install -y clang llvm
+      # 2. Linux ARMv7 (linux-arm) 平台下的交叉编译依赖包 (注意代号换成了 22.04 的 jammy)
+      - name: Install Linux dependencies (ARMv7)
+        if: matrix.os == 'ubuntu-22.04' && matrix.rid == 'linux-arm'
+        run: |
+          sudo dpkg --add-architecture armhf
+          sudo sed -i 's/^deb/deb [arch=amd64]/g' /etc/apt/sources.list
+          sudo sed -i 's/^deb-src/deb-src [arch=amd64]/g' /etc/apt/sources.list
+          sudo bash -c 'cat > /etc/apt/sources.list.d/armhf.list << EOF
+          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse
+          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse
+          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy-backports main restricted universe multiverse
+          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe multiverse
+          EOF'
+          sudo apt-get update
+          sudo apt-get install -y clang gcc-arm-linux-gnueabihf zlib1g-dev:armhf
+
+      # 3. Linux ARM64 原生编译依赖包
+      - name: Install Linux dependencies (ARM64 Native)
+        if: matrix.os == 'ubuntu-24.04-arm' && matrix.rid == 'linux-arm64'
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
 
-      # 缓存 NuGet 包
-      - name: Cache NuGet packages
-        uses: actions/cache@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-
+          node-version: "20"
 
-      # 执行发布工作
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
+      # 执行发布工作 (开启 PublishAot=true 将编译出本机独立机器码)
       - name: Publish Native AOT
-        run: dotnet publish Navigation/Navigation.csproj -c Release -r ${{ matrix.rid }} -o publish_output --self-contained true
+        run: dotnet publish Navigation/Navigation.csproj -c Release -r ${{ matrix.rid }} -o publish_output
 
-      # 验证构建输出
-      - name: Verify build output
-        run: |
-          if [ ! -d "publish_output" ] || [ -z "$(ls -A publish_output)" ]; then
-            echo "❌ Build output is empty!"
-            exit 1
-          else
-            echo "✅ Build output verified: $(ls -la publish_output | wc -l) files"
-          fi
-        shell: bash
-
-      # Windows 打包为 zip（带版本号）
+      # Windows 打包为 zip
       - name: Archive production artifacts (Windows)
         if: matrix.os == 'windows-latest'
-        run: |
-          $version = "${{ steps.get_version.outputs.VERSION }}"
-          Compress-Archive -Path publish_output\* -DestinationPath Navigation-${{ matrix.rid }}-$version.zip
-          Write-Host "✅ Created archive: Navigation-${{ matrix.rid }}-$version.zip"
+        run: Compress-Archive -Path publish_output\* -DestinationPath Navigation-${{ matrix.rid }}.zip
 
-      # Linux / macOS 打包为 tar.gz（带版本号）
+      # Linux / macOS 打包为 tar.gz
       - name: Archive production artifacts (Unix)
         if: matrix.os != 'windows-latest'
-        run: |
-          version="${{ steps.get_version.outputs.VERSION }}"
-          # 创建包含版本号的目录名以便打包
-          mkdir -p Navigation-${{ matrix.rid }}-$version
-          cp -r publish_output/* Navigation-${{ matrix.rid }}-$version/
-          tar -czvf Navigation-${{ matrix.rid }}-$version.tar.gz Navigation-${{ matrix.rid }}-$version/
-          echo "✅ Created archive: Navigation-${{ matrix.rid }}-$version.tar.gz"
+        run: tar -czvf Navigation-${{ matrix.rid }}.tar.gz -C publish_output .
 
       # 上传构建产物
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Navigation-${{ matrix.rid }}-${{ steps.get_version.outputs.VERSION }}
-          path: |
-            Navigation-${{ matrix.rid }}-${{ steps.get_version.outputs.VERSION }}.${{ matrix.archive_ext }}
-            Navigation-${{ matrix.rid }}-${{ steps.get_version.outputs.VERSION }}.zip
-          if-no-files-found: error
-          retention-days: 30
+          name: Navigation-${{ matrix.rid }}
+          path: Navigation-${{ matrix.rid }}.${{ matrix.archive_ext }}
 
   release:
     needs: build
@@ -131,77 +115,48 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
-      discussions: write # 可选：如果需要创建讨论
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # 获取完整历史用于生成 release notes
-
-      - name: Get version
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
-
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          merge-multiple: false
 
-      # 列出下载的 artifacts
-      - name: List artifacts
-        run: |
-          echo "📦 Downloaded artifacts:"
-          ls -la artifacts/
-          echo ""
-          echo "📁 Contents:"
-          find artifacts -type f -name "*.zip" -o -name "*.tar.gz" | sort
-
-      # 创建 GitHub Release
+      # 创建优化的 GitHub Release
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Release v${{ steps.get_version.outputs.VERSION }}
-          tag_name: ${{ github.ref_name }}
-          body: |
-            ## 🚀 Navigation Desktop v${{ steps.get_version.outputs.VERSION }}
-
-            ### 📥 Downloads
-            - **Windows x64**: `Navigation-win-x64-${{ steps.get_version.outputs.VERSION }}.zip`
-            - **Windows ARM64**: `Navigation-win-arm64-${{ steps.get_version.outputs.VERSION }}.zip`
-            - **Linux x64**: `Navigation-linux-x64-${{ steps.get_version.outputs.VERSION }}.tar.gz`
-            - **Linux ARMv7**: `Navigation-linux-arm-${{ steps.get_version.outputs.VERSION }}.tar.gz`
-            - **Linux ARM64**: `Navigation-linux-arm64-${{ steps.get_version.outputs.VERSION }}.tar.gz`
-            - **macOS Apple Silicon**: `Navigation-osx-arm64-${{ steps.get_version.outputs.VERSION }}.tar.gz`
-
-            ### ✨ Features
-            - Native AOT compiled for maximum performance
-            - No runtime dependencies required
-            - Cross-platform support
-
-            ### 🔧 System Requirements
-            - **Windows**: Windows 10/11 (x64 or ARM64)
-            - **Linux**: glibc 2.35+ (x64/ARMv7/ARM64)
-            - **macOS**: macOS 11+ (Apple Silicon)
-
-            ### 📝 Notes
-            - These are self-contained executables - no .NET runtime needed
-            - Built with .NET 10.0 and NativeAOT
-          draft: false
-          prerelease: false
-          files: |
-            artifacts/*/Navigation-*.zip
-            artifacts/*/Navigation-*.tar.gz
+          files: artifacts/*/*
+          # 自动生成基于 Commit/PR 的更新日志
           generate_release_notes: true
+          # 优化 Release 页面的文案展示
+          body: |
+            🎉 **Navigation 桌面版更新发布**
+
+            本次发布包含适用于各个主要操作系统的原生独立运行程序（Native AOT）。
+            **无需安装 .NET 运行时**，下载解压即可直接运行！
+
+            ### 📦 下载与运行指南
+
+            * **🪟 Windows**: 
+                * 下载对应的 `.zip` 文件。
+                * 解压后直接双击运行 `Navigation.exe`。
+            * **🍎 macOS & 🐧 Linux**: 
+                * 下载对应的 `.tar.gz` 文件。
+                * 打开终端，解压文件：`tar -xzvf Navigation-*.tar.gz`。
+                * 赋予执行权限并运行：`chmod +x Navigation && ./Navigation`。
+
+            ---
+
+            ### 💻 架构选择说明
+
+            | 架构标识 | 适用设备说明 |
+            | :--- | :--- |
+            | **`x64`** | 适用于绝大多数普通电脑（Intel / AMD 处理器）。 |
+            | **`arm64`** | 适用于 Apple Silicon (M1/M2/M3 等 Mac)、Windows on ARM 设备及大部分现代 ARM 架构的 Linux 服务器和高端开发板。 |
+            | **`arm`** | 适用于较老的 32 位 ARM Linux 设备（例如老款树莓派）。 |
+
+            ---
+
+            *💡 详细的代码更新日志请参考下方自动生成的 Release Notes 👇*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # 可选：验证 release 创建成功
-      - name: Verify release
-        run: |
-          echo "✅ Release v${{ steps.get_version.outputs.VERSION }} created successfully!"
-          echo "📊 Release assets:"
-          gh release view v${{ steps.get_version.outputs.VERSION }} --json assets --jq '.assets[].name'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
