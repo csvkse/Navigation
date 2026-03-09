@@ -3,8 +3,8 @@ name: Desktop Release
 on:
   push:
     tags:
-      - "v*" # 当推送形如 v1.0.0 的 tag 时自动触发打包并发布 Release
-  workflow_dispatch: # 允许在 GitHub Actions 面板手动点击运行
+      - "v*"
+  workflow_dispatch:
 
 jobs:
   build:
@@ -15,6 +15,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Windows
           - os: windows-latest
             rid: win-x64
             target_name: Windows x64
@@ -23,6 +24,8 @@ jobs:
             rid: win-arm64
             target_name: Windows ARM64
             archive_ext: zip
+
+          # Linux
           - os: ubuntu-latest
             rid: linux-x64
             target_name: Linux x64
@@ -35,6 +38,12 @@ jobs:
             rid: linux-arm64
             target_name: Linux ARM64
             archive_ext: tar.gz
+
+          # macOS
+          - os: macos-latest
+            rid: osx-x64
+            target_name: macOS Intel
+            archive_ext: tar.gz
           - os: macos-latest
             rid: osx-arm64
             target_name: macOS Apple Silicon
@@ -44,18 +53,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Linux x64 平台下的 NativeAOT 依赖包
+      # Linux x64 依赖
       - name: Install Linux dependencies (x64)
         if: matrix.os == 'ubuntu-latest' && matrix.rid == 'linux-x64'
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
 
-      # Linux ARMv7 (linux-arm) 平台下的交叉编译依赖包
+      # Linux ARMv7 交叉编译依赖
       - name: Install Linux dependencies (ARMv7)
         if: matrix.os == 'ubuntu-latest' && matrix.rid == 'linux-arm'
         run: |
           sudo dpkg --add-architecture armhf
           sudo sed -i 's/^deb/deb [arch=amd64]/g' /etc/apt/sources.list
-          sudo sed -i 's/^deb-src/deb-src [arch=amd64]/g' /etc/apt/sources.list
           sudo bash -c 'cat > /etc/apt/sources.list.d/armhf.list << EOF
           deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
           deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
@@ -65,13 +73,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang gcc-arm-linux-gnueabihf zlib1g-dev:armhf
 
-      # Linux ARM64 (linux-arm64) 平台下的交叉编译依赖包
+      # Linux ARM64 交叉编译依赖
       - name: Install Linux dependencies (ARM64)
         if: matrix.os == 'ubuntu-latest' && matrix.rid == 'linux-arm64'
         run: |
           sudo dpkg --add-architecture arm64
           sudo sed -i 's/^deb/deb [arch=amd64]/g' /etc/apt/sources.list
-          sudo sed -i 's/^deb-src/deb-src [arch=amd64]/g' /etc/apt/sources.list
           sudo bash -c 'cat > /etc/apt/sources.list.d/arm64.list << EOF
           deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
           deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
@@ -86,6 +93,7 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
+      # 如果不需要前端构建，可以注释掉以下步骤
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -96,22 +104,20 @@ jobs:
         with:
           version: 8
 
-      # 执行发布工作
-      # 由于 .csproj 已开启 PublishAot=true，这将在各个平台上编译出本机可独立运行的机器码（无需依赖 .NET 运行时）
       - name: Publish Native AOT
         run: dotnet publish Navigation/Navigation.csproj -c Release -r ${{ matrix.rid }} -o publish_output
 
-      # Windows 打包为 zip
+      # Windows 打包
       - name: Archive production artifacts (Windows)
         if: matrix.os == 'windows-latest'
         run: Compress-Archive -Path publish_output\* -DestinationPath Navigation-${{ matrix.rid }}.zip
 
-      # Linux / macOS 打包为 tar.gz
+      # Linux/macOS 打包
       - name: Archive production artifacts (Unix)
         if: matrix.os != 'windows-latest'
         run: tar -czvf Navigation-${{ matrix.rid }}.tar.gz -C publish_output .
 
-      # 上传构建产物 (在 Actions 的页面中可以直接下载该构建)
+      # 上传构建产物
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -121,7 +127,6 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
-    # 只有当触发是 Tag 推送时，才会执行正式发布 release
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
@@ -131,10 +136,12 @@ jobs:
         with:
           path: artifacts
 
-      # 创建 GitHub Release，并将打包好的 zip 和 tar.gz 产物全部附加到上面
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: artifacts/*/*
+          generate_release_notes: true # 自动生成发布说明
+          draft: false # 直接发布，不存为草稿
+          prerelease: ${{ contains(github.ref, '-') }} # 如果tag包含-，则标记为预发布
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

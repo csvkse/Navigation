@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - "v*"
+  pull_request: # 添加 PR 触发用于测试
+    branches: [main, master]
   workflow_dispatch:
 
 env:
@@ -11,61 +13,10 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  compile:
-    name: Compile Native AOT (${{ matrix.rid }})
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - rid: linux-x64
-            arch: amd64
-          - rid: linux-arm64
-            arch: arm64
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Linux dependencies (x64)
-        if: matrix.rid == 'linux-x64'
-        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
-
-      - name: Install Linux dependencies (ARM64)
-        if: matrix.rid == 'linux-arm64'
-        run: |
-          sudo dpkg --add-architecture arm64
-          sudo apt-get update
-          sudo apt-get install -y clang gcc-aarch64-linux-gnu zlib1g-dev:arm64
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "10.0.x"
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 8
-
-      - name: Publish Native AOT
-        run: dotnet publish Navigation/Navigation.csproj -c Release -r ${{ matrix.rid }} -o publish_output
-
-      - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-${{ matrix.arch }}
-          path: publish_output/
-
   build:
-    name: Build & Push Docker Image
-    needs: compile
     runs-on: ubuntu-latest
+    # PR 时也允许运行，但不推送
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
       packages: write
@@ -75,18 +26,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download amd64 artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: build-amd64
-          path: publish/amd64
-
-      - name: Download arm64 artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: build-arm64
-          path: publish/arm64
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -94,19 +33,22 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to the Container registry
+        # 只有 tag 推送或手动触发时才登录（PR 不登录）
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
+      - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            # 只有主分支才打 latest 标签
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
             type=ref,event=branch
             type=ref,event=pr
             type=semver,pattern={{version}}
@@ -117,9 +59,11 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: Navigation/Dockerfile.ci
-          platforms: linux/amd64,linux/arm64
-          push: true
+          file: Navigation/Dockerfile
+          # PR 时只构建 amd64（更快），tag 时构建多平台
+          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          # 只有非 PR 事件才推送
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
