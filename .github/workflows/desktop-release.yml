@@ -44,10 +44,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Linux 平台下需要安装 NativeAOT 对应的依赖包 (clang, zlib)
-      - name: Install Linux dependencies
-        if: matrix.os == 'ubuntu-latest'
+      # Linux x64 平台下的 NativeAOT 依赖包
+      - name: Install Linux dependencies (x64)
+        if: matrix.os == 'ubuntu-latest' && matrix.rid == 'linux-x64'
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      # Linux ARMv7 (linux-arm) 平台下的交叉编译依赖包
+      - name: Install Linux dependencies (ARMv7)
+        if: matrix.os == 'ubuntu-latest' && matrix.rid == 'linux-arm'
+        run: |
+          sudo dpkg --add-architecture armhf
+          sudo apt-get update
+          sudo apt-get install -y clang gcc-arm-linux-gnueabihf zlib1g-dev:armhf
+
+      # Linux ARM64 (linux-arm64) 平台下的交叉编译依赖包
+      - name: Install Linux dependencies (ARM64)
+        if: matrix.os == 'ubuntu-latest' && matrix.rid == 'linux-arm64'
+        run: |
+          sudo dpkg --add-architecture arm64
+          sudo apt-get update
+          sudo apt-get install -y clang gcc-aarch64-linux-gnu zlib1g-dev:arm64
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4

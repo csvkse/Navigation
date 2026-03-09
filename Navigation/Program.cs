@@ -50,9 +50,7 @@ app.MapFallbackToFile("index.html");
 var fastdb = app.MapGroup("/fastdb");
 
 // 文档/健康检查
-fastdb.MapGet("/doc", () => "FastDB is running!")
-    .WithName("FastDBDoc")
-    .Produces<string>();
+fastdb.MapGet("/doc", () => "FastDB is running!");
 
 // 获取当前 Key 下的所有数据
 fastdb.MapGet("/", (string key, FastDbService db) =>
@@ -60,8 +58,7 @@ fastdb.MapGet("/", (string key, FastDbService db) =>
     var hashKey = FastDbService.ComputeMd5(key);
     var list = db.GetByHashKey(hashKey);
     return list.Select(ToResult).ToArray();
-}).WithName("FastDBGetAll")
-  .Produces<FastDataResult[]>();
+});
 
 // 只读查询 - 通过 ID 的 GUID
 fastdb.MapGet("/readonly", (Guid readOnlyId, FastDbService db) =>
@@ -72,9 +69,7 @@ fastdb.MapGet("/readonly", (Guid readOnlyId, FastDbService db) =>
 
     var list = db.GetByHashKey(data.HashKey);
     return Results.Ok(list.Select(ToResult).ToArray());
-}).WithName("FastDBReadOnly")
-  .Produces<FastDataResult[]>()
-  .ProducesProblem(404);
+});
 
 // 根据 ID 获取指定数据
 fastdb.MapGet("/{id}", (Guid id, string key, FastDbService db) =>
@@ -82,9 +77,7 @@ fastdb.MapGet("/{id}", (Guid id, string key, FastDbService db) =>
     var hashKey = FastDbService.ComputeMd5(key);
     var data = db.GetById(id.ToString(), hashKey);
     return data != null ? Results.Ok(ToResult(data)) : Results.NotFound();
-}).WithName("FastDBGetById")
-  .Produces<FastDataResult>()
-  .ProducesProblem(404);
+});
 
 // JSON 内部字段搜索
 fastdb.MapPost("/search", (string key, JsonElement jsonQuery, FastDbService db) =>
@@ -92,8 +85,7 @@ fastdb.MapPost("/search", (string key, JsonElement jsonQuery, FastDbService db) 
     var hashKey = FastDbService.ComputeMd5(key);
     var list = db.Search(hashKey, jsonQuery);
     return list.Select(ToResult).ToArray();
-}).WithName("FastDBSearch")
-  .Produces<FastDataResult[]>();
+});
 
 // 新增数据
 fastdb.MapPost("/", (string key, JsonElement data, FastDbService db) =>
@@ -108,8 +100,7 @@ fastdb.MapPost("/", (string key, JsonElement data, FastDbService db) =>
     };
     db.Insert(entity);
     return ToResult(entity);
-}).WithName("FastDBPost")
-  .Produces<FastDataResult>();
+});
 
 // 更新数据
 fastdb.MapPut("/{id}", (Guid id, string key, JsonElement data, FastDbService db) =>
@@ -121,17 +112,14 @@ fastdb.MapPut("/{id}", (Guid id, string key, JsonElement data, FastDbService db)
 
     db.Update(id.ToString(), hashKey, data.GetRawText(), DateTime.Now.ToString("o"));
     return Results.Ok(true);
-}).WithName("FastDBPut")
-  .Produces<bool>()
-  .ProducesProblem(404);
+});
 
 // 删除数据
 fastdb.MapDelete("/{id}", (Guid id, string key, FastDbService db) =>
 {
     var hashKey = FastDbService.ComputeMd5(key);
     return db.Delete(id.ToString(), hashKey);
-}).WithName("FastDBDelete")
-  .Produces<bool>();
+});
 
 app.Run();
 
