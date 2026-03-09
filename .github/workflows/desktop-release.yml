@@ -27,11 +27,6 @@ jobs:
             rid: linux-x64
             target_name: Linux x64
             archive_ext: tar.gz
-          # Linux ARMv7: 使用 22.04 以兼容原有的交叉编译源替换逻辑
-          - os: ubuntu-22.04
-            rid: linux-arm
-            target_name: Linux ARMv7
-            archive_ext: tar.gz
           # Linux ARM64: 直接使用 GitHub 官方 ARM 原生镜像，免去交叉编译的麻烦，速度更快
           - os: ubuntu-24.04-arm
             rid: linux-arm64
@@ -50,24 +45,7 @@ jobs:
       - name: Install Linux dependencies (x64)
         if: matrix.os == 'ubuntu-latest' && matrix.rid == 'linux-x64'
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
-
-      # 2. Linux ARMv7 (linux-arm) 平台下的交叉编译依赖包 (注意代号换成了 22.04 的 jammy)
-      - name: Install Linux dependencies (ARMv7)
-        if: matrix.os == 'ubuntu-22.04' && matrix.rid == 'linux-arm'
-        run: |
-          sudo dpkg --add-architecture armhf
-          sudo sed -i 's/^deb/deb [arch=amd64]/g' /etc/apt/sources.list
-          sudo sed -i 's/^deb-src/deb-src [arch=amd64]/g' /etc/apt/sources.list
-          sudo bash -c 'cat > /etc/apt/sources.list.d/armhf.list << EOF
-          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse
-          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse
-          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy-backports main restricted universe multiverse
-          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe multiverse
-          EOF'
-          sudo apt-get update
-          sudo apt-get install -y clang gcc-arm-linux-gnueabihf zlib1g-dev:armhf
-
-      # 3. Linux ARM64 原生编译依赖包
+      # 2. Linux ARM64 原生编译依赖包
       - name: Install Linux dependencies (ARM64 Native)
         if: matrix.os == 'ubuntu-24.04-arm' && matrix.rid == 'linux-arm64'
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
