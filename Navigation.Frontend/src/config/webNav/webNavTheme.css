@@ -1,0 +1,406 @@
+/* =========================================================================================================
+   WEBNAV THEMES - EXPANDED COLLECTION (REFINED V3)
+   ========================================================================================================= */
+
+/* --- 1. Premium Glass (theme-premium) [Preserved Crystal] --- */
+/* Style: Crystal, Vibrant Blur, Glowing Depth */
+
+:root:has([class*="theme-premium"]) {
+    /* Day Palette: Crystal */
+    --background: oklch(0.98 0.01 240);
+    --foreground: oklch(0.2 0.05 260);
+    --primary: oklch(0.55 0.2 280);         /* Vivid Royal Blue */
+    --muted: oklch(0.95 0.02 240);
+    --border: oklch(0.9 0.02 240);
+    
+    /* Crystal Effect */
+    --glass-grad: linear-gradient(135deg, rgba(255,255,255,0.8), rgba(255,255,255,0.4));
+    --glass-border: 1px solid rgba(255, 255, 255, 0.6);
+    --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+    --glass-blur: blur(20px) saturate(180%);
+
+    /* Fonts */
+    --app-name-size: 13px;
+    --app-name-weight: 600;
+}
+
+.dark:has([class*="theme-premium"]) {
+    /* Night Palette: Deep Space */
+    --background: oklch(0.1 0.05 270);
+    --foreground: oklch(0.98 0.02 260);
+    --primary: oklch(0.7 0.2 280);          /* Neon Violet */
+    --glass-grad: linear-gradient(135deg, rgba(40,40,60,0.7), rgba(20,20,30,0.4));
+    --glass-border: 1px solid rgba(255, 255, 255, 0.1);
+    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+    --border: rgba(255,255,255,0.1);
+}
+
+/* Premium App Card */
+:root:has([class*="theme-premium"]) .app-card {
+    background: var(--glass-grad);
+    backdrop-filter: var(--glass-blur);
+    border: var(--glass-border);
+    border-top-color: rgba(255,255,255,0.9); /* Highlight top edge */
+    border-radius: 20px;
+    box-shadow: var(--glass-shadow);
+    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+:root:has([class*="theme-premium"]) .app-card:hover {
+    transform: translateY(-5px) scale(1.02);
+    background: color-mix(in srgb, var(--webnav-hover-accent) 15%, #fff); /* Tinted hover */
+    box-shadow: 0 15px 40px -10px color-mix(in srgb, var(--webnav-hover-accent) 40%, transparent); /* Colored glow */
+    border-color: color-mix(in srgb, var(--webnav-hover-accent) 30%, transparent);
+}
+
+.dark:has([class*="theme-premium"]) .app-card:hover {
+    background: color-mix(in srgb, var(--webnav-hover-accent) 20%, #000);
+}
+
+/* Premium Bookmark Group */
+:root:has([class*="theme-premium"]) .bookmark-group-card {
+    background: var(--glass-grad);
+    backdrop-filter: var(--glass-blur);
+    border: var(--glass-border);
+    border-radius: 24px;
+    box-shadow: var(--glass-shadow);
+}
+
+:root:has([class*="theme-premium"]) .bookmark-group-title {
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    background: linear-gradient(90deg, var(--foreground), var(--primary));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent; /* Gradient text */
+}
+
+/* Premium Bookmark Item */
+:root:has([class*="theme-premium"]) .bookmark-item {
+    border-radius: 12px;
+    padding: 8px 12px;
+    margin-bottom: 4px;
+    transition: all 0.2s ease;
+}
+
+/* :root:has([class*="theme-premium"]) .bookmark-item:hover {
+    background: rgba(255, 255, 255, 0.6);
+    box-shadow: 0 4px 15px -5px rgba(0, 0, 0, 0.1);
+    transform: scale(1.02);
+    border-left: none;
+}
+
+.dark:has([class*="theme-premium"]) .bookmark-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 15px -5px rgba(0, 0, 0, 0.4);
+} */
+
+
+/* --- 2. Ultra Pure (theme-minimal) [Re-Refined: Modern Clean] --- */
+/* Style: Modern, Airy, Soft Borders, Friendly */
+
+:root:has([class*="theme-minimal"]) {
+    /* Day: Clean Slate */
+    --background: oklch(0.99 0 0);      /* Pure White / Near White */
+    --foreground: oklch(0.2 0 0);       /* Soft Black */
+    --primary: oklch(0.4 0 0);          /* Grey */
+    --muted: oklch(0.97 0 0);
+    --border: oklch(0.92 0 0);          /* Very subtle border */
+    
+    --card-radius: 16px; 
+}
+
+.dark:has([class*="theme-minimal"]) {
+    /* Night: Soft Void */
+    --background: oklch(0.1 0 0);
+    --foreground: oklch(0.9 0 0);
+    --primary: oklch(0.6 0 0);
+    --muted: oklch(0.15 0 0);
+    --border: oklch(0.2 0 0);
+}
+
+/* Minimal App Card */
+:root:has([class*="theme-minimal"]) .app-card {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--card-radius);
+    box-shadow: none;
+    transition: all 0.2s ease;
+    padding: 0.75rem;
+}
+
+:root:has([class*="theme-minimal"]) .app-card:hover {
+    background: color-mix(in srgb, var(--webnav-hover-accent) 5%, var(--background)); /* Very subtle tint */
+    border-color: color-mix(in srgb, var(--webnav-hover-accent) 20%, var(--border));
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px -8px rgba(0, 0, 0, 0.05); /* Softest shadow */
+}
+
+/* Reset hover colors (no invert) */
+:root:has([class*="theme-minimal"]) .app-card:hover .app-grid-name {
+    color: var(--foreground);
+    opacity: 1;
+}
+
+:root:has([class*="theme-minimal"]) .app-card:hover .app-card-icon {
+    /* Standard icon behavior - maybe slight emphasis */
+    transform: scale(1.05);
+}
+
+
+/* Minimal Bookmark Group */
+:root:has([class*="theme-minimal"]) .bookmark-group-card {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: none;
+    padding-left: 1.5rem; /* Restore padding */
+}
+
+:root:has([class*="theme-minimal"]) .bookmark-group-title {
+    font-weight: 600;
+    text-transform: none; /* Friendly case */
+    letter-spacing: 0;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+    display: block;
+}
+
+/* Minimal Bookmark Item */
+:root:has([class*="theme-minimal"]) .bookmark-item {
+    border-radius: 8px;
+    border-left: none;
+    padding: 0.5rem;
+    transition: background-color 0.1s ease;
+}
+
+:root:has([class*="theme-minimal"]) .bookmark-item:hover {
+    background: var(--muted);
+    color: var(--foreground);
+    transform: none;
+    text-decoration: none;
+}
+
+:root:has([class*="theme-minimal"]) .bookmark-item:hover .bookmark-item-name {
+    font-weight: 500;
+}
+
+
+/* --- 3. Zen Forest (theme-forest) [Preserved] --- */
+/* Style: Organic, Wabi-sabi, Soft Shapes, Warm Greens */
+
+:root:has([class*="theme-forest"]) {
+    /* Day Palette: Morning Mist & Moss */
+    --background: oklch(0.96 0.02 110);    /* Warm Rice Paper (Yellowish Grey) */
+    --foreground: oklch(0.3 0.05 140);     /* Deep Moss Green */
+    --primary: oklch(0.6 0.12 135);        /* Sage/Matcha */
+    --muted: oklch(0.92 0.03 110);
+    --border: oklch(0.88 0.04 110);
+    
+    --organic-radius: 20px 4px 20px 4px; /* Leaf shape hint */
+}
+
+.dark:has([class*="theme-forest"]) {
+    /* Night Palette: Deep Jungle */
+    --background: oklch(0.18 0.04 145);    /* Dark Bark/Green */
+    --foreground: oklch(0.9 0.05 120);     /* Pale Sprout */
+    --primary: oklch(0.7 0.15 130);        /* Glowing Fern */
+    --muted: oklch(0.25 0.06 145);
+    --border: oklch(0.3 0.06 145);
+}
+
+/* Forest App Card */
+:root:has([class*="theme-forest"]) .app-card {
+    background: var(--background); /* Or maybe a slightly lighter shade? */
+    border: 1px solid var(--border);
+    border-radius: var(--organic-radius);
+    box-shadow: 2px 4px 12px -4px rgba(60, 80, 60, 0.08); /* Greenish shadow */
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+:root:has([class*="theme-forest"]) .app-card:hover {
+    border-radius: 4px 20px 4px 20px; /* Shape shift on hover! */
+    background: color-mix(in srgb, var(--primary) 15%, var(--background));
+    border-color: var(--primary);
+    transform: translateY(-2px);
+    box-shadow: 4px 8px 20px -6px rgba(60, 80, 60, 0.15);
+}
+
+/* Forest Bookmark Group */
+:root:has([class*="theme-forest"]) .bookmark-group-card {
+    background: color-mix(in srgb, var(--background) 50%, transparent);
+    border: 1px dashed var(--border); /* Organic/Craft feel */
+    border-radius: 16px;
+    padding: 1.5rem;
+}
+
+:root:has([class*="theme-forest"]) .bookmark-group-title {
+    font-family: serif; /* Nature feel */
+    font-style: italic;
+    color: var(--primary);
+    font-size: 1rem;
+    border-bottom: 2px solid color-mix(in srgb, var(--primary) 30%, transparent);
+    width: fit-content;
+    padding-right: 1rem;
+}
+
+/* Forest Bookmark Item */
+:root:has([class*="theme-forest"]) .bookmark-item {
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    border: none;
+    font-family: sans-serif; /* Contrast with title */
+}
+
+:root:has([class*="theme-forest"]) .bookmark-item:hover {
+    background: var(--muted);
+    color: var(--primary);
+    transform: translateX(4px);
+    box-shadow: none;
+    /* Little leaf icon indicator? */
+    border-right: 3px solid var(--primary);
+    border-left: none; /* Switch side */
+}
+
+
+/* --- 4. Neo-Retro (theme-retro) [Preserved] --- */
+:root:has([class*="theme-retro"]) {
+    /* Day: Old Paper */
+    --background: oklch(0.94 0.03 85);
+    --foreground: oklch(0.3 0.04 60);
+    --primary: oklch(0.55 0.15 45);
+    --muted: oklch(0.88 0.03 85);
+    --border: oklch(0.8 0.04 85);
+    --card-bg: oklch(0.97 0.01 85);
+}
+
+.dark:has([class*="theme-retro"]) {
+    /* Night: Vintage Terminal */
+    --background: oklch(0.12 0.02 100);
+    --foreground: oklch(0.85 0.1 85);
+    --primary: oklch(0.8 0.15 85);
+    --muted: oklch(0.18 0.03 100);
+    --border: oklch(0.25 0.04 100);
+    --card-bg: oklch(0.16 0.02 100);
+}
+
+:root:has([class*="theme-retro"]) .app-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    box-shadow: 2px 2px 0 var(--border);
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+:root:has([class*="theme-retro"]) .app-card:hover {
+    transform: translate(1px, 1px);
+    box-shadow: 1px 1px 0 var(--primary);
+    border-color: var(--primary);
+}
+
+:root:has([class*="theme-retro"]) .app-card .app-card-icon {
+    border-radius: 50%;
+    border: 1px dashed var(--border);
+}
+
+:root:has([class*="theme-retro"]) .bookmark-group-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    box-shadow: 4px 4px 0 var(--muted);
+    border-radius: 0;
+}
+
+:root:has([class*="theme-retro"]) .bookmark-group-title {
+    font-family: var(--app-font-family, serif);
+    font-style: italic;
+    font-weight: 600;
+    color: var(--primary);
+}
+
+:root:has([class*="theme-retro"]) .bookmark-item:hover {
+    background: var(--muted);
+    box-shadow: inset 0 0 0 1px var(--border);
+    transform: none;
+}
+
+
+/* --- 5. Neon Nights (theme-neon) [Preserved] --- */
+:root:has([class*="theme-neon"]) {
+    /* Day: Electric Purple/Pink */
+    --background: oklch(0.96 0.01 320);
+    --foreground: oklch(0.2 0.1 320);
+    --primary: oklch(0.65 0.25 320);
+    --secondary: oklch(0.7 0.2 200);
+    --muted: oklch(0.92 0.02 320);
+    --border: oklch(0.85 0.05 320);
+}
+
+.dark:has([class*="theme-neon"]) {
+    /* Night: Cyber City */
+    --background: oklch(0.1 0.05 280);
+    --foreground: oklch(0.9 0.05 320);
+    --primary: oklch(0.7 0.25 320);
+    --secondary: oklch(0.75 0.2 190);
+    --muted: oklch(0.2 0.08 280);
+    --border: oklch(0.3 0.1 280);
+}
+
+:root:has([class*="theme-neon"]) .app-card {
+    background: color-mix(in srgb, var(--background) 80%, transparent);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.25s ease;
+}
+
+:root:has([class*="theme-neon"]) .app-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: linear-gradient(90deg, var(--secondary), var(--primary));
+    opacity: 0.5;
+    transition: height 0.2s ease, opacity 0.2s ease;
+}
+
+:root:has([class*="theme-neon"]) .app-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 0 20px -5px var(--primary);
+    border-color: var(--primary);
+}
+
+:root:has([class*="theme-neon"]) .app-card:hover::after {
+    height: 100%;
+    opacity: 0.1;
+}
+
+:root:has([class*="theme-neon"]) .bookmark-group-card {
+    background: color-mix(in srgb, var(--background) 60%, transparent);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: 0 0 15px -10px var(--primary);
+}
+
+:root:has([class*="theme-neon"]) .bookmark-group-title {
+    background: linear-gradient(45deg, var(--primary), var(--secondary));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    font-weight: 800;
+}
+
+:root:has([class*="theme-neon"]) .bookmark-item {
+    border-radius: 8px;
+    border-left: 2px solid transparent;
+}
+
+:root:has([class*="theme-neon"]) .bookmark-item:hover {
+    background: color-mix(in srgb, var(--primary) 15%, transparent);
+    border-left-color: var(--secondary);
+    box-shadow: 0 0 8px var(--primary);
+    text-shadow: 0 0 5px var(--primary);
+}

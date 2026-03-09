@@ -1,0 +1,11 @@
+@Navigation_HostAddress = http://localhost:5288
+
+GET {{Navigation_HostAddress}}/todos/
+Accept: application/json
+
+###
+
+GET {{Navigation_HostAddress}}/todos/1
+Accept: application/json
+
+###

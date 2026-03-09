@@ -1,0 +1,230 @@
+/* =========================================================================================================
+   WEBNAV THEME & COMPONENT STYLES
+   Description: Independent style configuration for WebNav application, apps, bookmarks, and themes.
+   ========================================================================================================= */
+
+/* --- 1. Global Variables & Defaults --- */
+
+:root {
+    /* Bookmark Card Background: Default transparency matches previous Tailwind classes */
+    --bookmark-card-bg: color-mix(in srgb, var(--card) 40%, transparent);
+    
+    /* Layout & Spacing */
+    --card-padding: 0.75rem;
+
+    /* Fonts - App Grid */
+    --app-name-size: 11px;
+    --app-name-weight: 900;
+    --app-cat-size: 10px;
+    --app-cat-weight: 700;
+    --app-cat-tracking: 0.1em;
+    --app-fallback-size: 8px;
+
+    /* Fonts - Bookmarks */
+    --bm-title-size: 12px;
+    --bm-title-weight: 900;
+    --bm-title-tracking: 0.12em;
+    --bm-title-transform: uppercase;
+
+    --bm-item-size: 13px;
+    --bm-item-weight: 700;
+}
+
+@media (min-width: 640px) {
+    :root {
+        --app-name-size: 13px;
+        --app-cat-size: 11px;
+        --bm-title-size: 13px;
+        --bm-title-tracking: 0.2em;
+        --app-fallback-size-sm: 14px;
+    }
+}
+
+.dark {
+    --bookmark-card-bg: color-mix(in srgb, var(--card) 60%, transparent);
+}
+
+
+/* --- 2. Base Component Styles --- */
+
+/* Shared Card Configuration */
+.app-card,
+.bookmark-group-card {
+    border-radius: var(--card-border-radius);
+    border-width: var(--card-border-width);
+    /* Allow dynamic color injection, fallback to theme primary */
+    --webnav-hover-accent: var(--cyber-color, var(--primary));
+}
+
+/* App Card Specifics */
+.app-card {
+    padding: var(--card-padding);
+    transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+/* Bookmark Group Card Specifics */
+.bookmark-group-card {
+    background-color: var(--bookmark-card-bg);
+    padding: var(--card-padding);
+}
+
+/* App Grid Typography */
+.app-grid-name {
+    font-size: var(--app-name-size);
+    font-weight: var(--app-name-weight);
+    font-family: var(--app-font-family, inherit);
+    font-style: var(--app-font-style, normal);
+    text-transform: var(--app-text-transform, none);
+}
+
+.app-grid-fallback-text {
+    font-size: var(--app-fallback-size, 8px);
+}
+
+@media (min-width: 640px) {
+    .app-grid-fallback-text {
+        font-size: var(--app-fallback-size-sm, 14px);
+    }
+}
+
+.app-grid-category {
+    font-size: var(--app-cat-size);
+    font-weight: var(--app-cat-weight);
+    letter-spacing: var(--app-cat-tracking);
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+    opacity: 0.4;
+}
+
+/* Bookmark Typography */
+.bookmark-group-title {
+    font-size: var(--bm-title-size);
+    font-weight: var(--bm-title-weight);
+    letter-spacing: var(--bm-title-tracking);
+    text-transform: var(--bm-title-transform);
+}
+
+.bookmark-item-name {
+    font-size: var(--bm-item-size);
+    font-weight: var(--bm-item-weight);
+    color: var(--cyber-color, inherit) !important;
+}
+
+
+/* --- 3. Component Interactions (Global) --- */
+
+/* Bookmark Item Interaction */
+.bookmark-item {
+    transition: transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+    border-left: 2px solid transparent;
+    /* Local variable for item hover color */
+    --item-color: var(--cyber-color, var(--webnav-hover-accent));
+}
+
+.bookmark-item:hover {
+    background-color: color-mix(in srgb, var(--item-color) 10%, transparent);
+    transform: translateX(2px);
+    /* Soft left border effect using box-shadow */
+    box-shadow: -2px 0 0 var(--item-color);
+    border-left-color: transparent;
+}
+
+.bookmark-item:hover .bookmark-item-name {
+    color: var(--item-color);
+}
+
+.bookmark-item .h-6.w-6 {
+    transition: all 0.15s ease;
+    background: color-mix(in srgb, var(--item-color) 15%, transparent);
+    color: var(--item-color);
+    border-radius: 4px;
+    padding: 2px;
+}
+
+.bookmark-item:hover .h-6.w-6 {
+    /* Optional: keep or modify hover effect. Previously it inverted colors. 
+       If base is foreground/accent, keeping inverse on hover makes sense for feedback. 
+       Or maybe just scale/shadow. 
+       The user said "self-picked color" specifically. 
+       Let's keep the inverse or make it consistent with App Card hover (color-mix). 
+       The App Card hover changes background to color-mix(accent, foreground). 
+       Let's try that for consistency? Or stick to simple inverse which is strong feedback. 
+       I'll keep the inverse for now as it uses --item-color directly. */
+    background-color: var(--item-color);
+    background-color: var(--item-color);
+    color: var(--background); /* Ensure icon contrast */
+}
+
+/* Manage Mode - Show tools on hover only, positioned absolutely */
+.bookmark-item .z-20.flex {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: inherit; /* Maybe inherit the bookmark background? */
+    /* If bookmark item has no bg (default transparent), then buttons will float over text.
+       Usually buttons have their own bg or are just icons. 
+       In Cyber theme, buttons have bg:white or var(--card-bg).
+       I'll add a backdrop-filter or just rely on button styles.
+       Let's stick to positioning first. */
+    padding-left: 4px; /* Space from text if background is used */
+}
+
+.bookmark-item:hover .z-20.flex,
+.bookmark-item:focus-within .z-20.flex {
+    opacity: 1;
+}
+
+/* Dark mode icon visibility */
+.dark .bookmark-item:hover .h-6.w-6 {
+    color: var(--background);
+}
+
+
+/* App Card Interaction */
+.app-card:hover {
+    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--webnav-hover-accent) 30%, var(--border, transparent));
+    box-shadow: 0 4px 12px -2px color-mix(in srgb, var(--webnav-hover-accent) 20%, transparent);
+}
+
+.app-card .app-card-icon {
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s ease, color 0.2s ease;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--webnav-hover-accent) 15%, transparent);
+    border-radius: 4px; /* Optional: decent default */
+    color: var(--webnav-hover-accent);
+}
+
+.app-card:hover .app-card-icon {
+    transform: scale(1.1);
+    color: var(--webnav-hover-accent);
+    /* Keep background consistent or allow hover tint? User said "foreground background", implying base state. Hover can stay or be adjusted. 
+       Let's keep the user's "foreground" preference as base, but hover might need to be subtle or just scale. 
+       If I change background on hover it might conflict with "foreground background" rule. 
+       But usually hover needs feedback. The cyber theme used mix-blend. 
+       Let's leave hover background change for now, or maybe make it solid foreground with shadow?
+       Actually, `webNav.css` original had `background-color: color-mix...`. 
+       If user wants "foreground background", that's likely for the BASE state. 
+       I will preserve the hover scale but maybe reset background to foreground or allow tint?
+       Let's just update the base style above and leave this hover effect as is, 
+       BUT the hover effect explicitly sets background-color. 
+       If I want "foreground" to be the rule, I should probably ensure hover doesn't break it completely unless desired. 
+       I'll leave hover as is for now, it provides feedback. */
+    background-color: color-mix(in srgb, var(--webnav-hover-accent) 10%, var(--foreground));
+}
+
+/* Dark mode adjustments for app card hover */
+.dark .app-card:hover {
+    border-color: color-mix(in srgb, var(--webnav-hover-accent) 50%, transparent);
+    box-shadow: 0 6px 20px -4px color-mix(in srgb, var(--webnav-hover-accent) 30%, transparent);
+    /* Subtle background tint on hover */
+    background-color: color-mix(in srgb, var(--bookmark-card-bg, var(--card)) 90%, var(--webnav-hover-accent));
+}
+

@@ -1,0 +1,231 @@
+/* [7] Midnight Slate */
+/* Day: Slate Light */
+:root:has([class*="theme-midnight-slate"]) {
+    --background: oklch(0.9658 0.0132 83.7692);
+    --foreground: oklch(0.2 0.02 260);
+    --primary: oklch(57.444% 0.04674 329.929);
+    --muted: oklch(68.071% 0.02418 67.334);
+    --border: oklch(0.85 0.02 260);
+
+    /* Fonts - App Grid */
+    --app-name-size: 11px;
+
+    /* Fonts - Bookmarks */
+    --bm-title-size: 12px;
+    --bm-title-weight: 900;
+    --bm-title-tracking: 0.12em;
+    --bm-title-transform: uppercase;
+    --bm-item-size: 13px;
+    --bm-item-weight: 700;
+
+    /* Specific override for bookmark cards in this theme */
+    --bookmark-card-bg: oklch(57.262% 0.02171 80.017 / 0.1);
+}
+
+/* Midnight Slate Specific Component Overrides */
+
+/* App Card Styling */
+:root:has([class*="theme-midnight-slate"]) .app-card {
+    background-color: var(--bookmark-card-bg);
+    border: none;
+    border-radius: 24px;
+    box-shadow: none;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1.1rem;
+}
+
+:root:has([class*="theme-midnight-slate"]) .app-card:hover {
+    background-color: color-mix(in srgb, var(--webnav-hover-accent) 10%, transparent);
+    transform: translateY(-4px);
+    box-shadow: 0 10px 30px -10px color-mix(in srgb, var(--webnav-hover-accent) 20%, transparent);
+}
+
+:root:has([class*="theme-midnight-slate"]) .app-grid-name {
+    font-weight: 500;
+    margin-top: 0.5rem;
+}
+
+:root:has([class*="theme-midnight-slate"]) .app-grid-category {
+    font-size: 0.75rem;
+    opacity: 0.6;
+    margin-top: 0.1rem;
+}
+
+/* Bookmark Group Styling */
+:root:has([class*="theme-midnight-slate"]) .bookmark-group-card {
+    background-color: var(--bookmark-card-bg);
+    border: none;
+    border-radius: 28px;
+    padding: 1.5rem;
+    box-shadow: none;
+}
+
+/* Add a decorative dot before the title if possible, or style the icon */
+:root:has([class*="theme-midnight-slate"]) .bookmark-group-title svg {
+    /* Assuming the icon is an svg in the title area */
+    color: var(--webnav-hover-accent);
+    fill: currentColor;
+    opacity: 0.8;
+}
+
+:root:has([class*="theme-midnight-slate"]) .bookmark-item {
+    border-radius: 12px;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.25rem;
+    background-color: transparent;
+    transition: all 0.2s ease;
+    border-left: none; /* Remove default border to reduce margin feel */
+}
+
+:root:has([class*="theme-midnight-slate"]) .bookmark-item:hover {
+    background-color: color-mix(in srgb, var(--webnav-hover-accent) 8%, transparent);
+    transform: translateX(2px);
+    box-shadow: none;
+}
+
+:root:has([class*="theme-midnight-slate"]) .bookmark-item-name {
+    font-weight: 500;
+    color: var(--foreground);
+    opacity: 0.8;
+}
+
+:root:has([class*="theme-midnight-slate"]) .bookmark-item:hover .bookmark-item-name {
+    opacity: 1;
+    color: var(--webnav-hover-accent);
+}
+
+
+@media (min-width: 640px) {
+    :root:has([class*="theme-midnight-slate"]) {
+        --app-name-size: 16px;
+        --app-name-weight: 450;
+
+        --bm-title-size: 13px;
+        --bm-title-weight: 500;
+        --bm-item-weight: 400;
+    }
+}
+
+/* Night */
+/* Night - Midnight Slate (优化版) */
+.dark:has([class*="theme-midnight-slate"]) {
+    /* 基础色板 - 更深邃的板岩背景，更通透的光感 */
+    --background: oklch(0.22 0.015 264);      /* 更深的基础背景 */
+    --foreground: oklch(82.929% 0.00607 264.638);      /* 更纯净的文字色，轻微冷调 */
+    --primary: oklch(59.716% 0.042 326.012);           /* 暖琥珀色，夜间更醒目 */
+    --primary-foreground: oklch(0.98 0.002 264);
+    
+    /* 辅助色 - 层次更分明 */
+    --muted: oklch(0.3 0.018 264);            /* 柔和高光背景 */
+    --muted-foreground: oklch(0.72 0.01 264); /* 提高对比 */
+    --border: oklch(0.35 0.016 264);          /* 微光边框 */
+    
+    /* 强调色 - 可自定义的交互色 */
+    --webnav-hover-accent: oklch(0.78 0.16 34); /* 暖杏色，比primary更柔和 */
+    
+    /* 卡片背景 - 半透明玻璃质感 */
+    --bookmark-card-bg: oklch(0.28 0.014 264 / 0.55);
+    --app-card-bg: oklch(0.26 0.012 264 / 0.4);
+    
+    /* 字体权重优化 - 夜间更清晰 */
+    --app-name-size: 16px;
+    --app-name-weight: 480;
+    --bm-title-size: 13px;
+    --bm-title-weight: 600;        /* 从900降低，避免刺眼 */
+    --bm-title-transform: uppercase;
+    --bm-item-size: 13px;
+    --bm-item-weight: 450;         /* 适中加粗，不眩光 */
+}
+
+/* App Card - 夜间微光效果 */
+.dark:has([class*="theme-midnight-slate"]) .app-card {
+    background-color: var(--app-card-bg);
+    backdrop-filter: blur(2px);    /* 轻微玻璃态 */
+    border: 0.5px solid oklch(0.45 0.018 264 / 0.15);
+    border-radius: 24px;
+    transition: all 0.25s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.dark:has([class*="theme-midnight-slate"]) .app-card:hover {
+    background-color: oklch(0.35 0.03 264 / 0.4);
+    border-color: oklch(0.65 0.1 34 / 0.25);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 28px -12px oklch(0 0 0 / 0.6),
+                0 0 0 1px oklch(0.78 0.16 34 / 0.1) inset;
+}
+
+.dark:has([class*="theme-midnight-slate"]) .app-grid-name {
+    color: oklch(0.94 0.008 264);
+    font-weight: 520;
+    text-shadow: 0 1px 2px oklch(0 0 0 / 0.2);
+}
+
+.dark:has([class*="theme-midnight-slate"]) .app-grid-category {
+    color: oklch(0.75 0.018 264);
+    font-size: 0.7rem;
+    opacity: 0.9;                 /* 提升可见度 */
+}
+
+/* Bookmark Group - 夜间强化层次 */
+.dark:has([class*="theme-midnight-slate"]) .bookmark-group-card {
+    background-color: oklch(0.26 0.016 264 / 0.45);
+    backdrop-filter: blur(2px);
+    border: 0.5px solid oklch(0.42 0.016 264 / 0.2);
+    border-radius: 28px;
+    box-shadow: 0 4px 12px oklch(0 0 0 / 0.2);
+}
+
+.dark:has([class*="theme-midnight-slate"]) .bookmark-group-title {
+    color: oklch(0.96 0.01 264);
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid oklch(0.5 0.018 264 / 0.3);
+    padding-bottom: 0.5rem;
+}
+
+.dark:has([class*="theme-midnight-slate"]) .bookmark-group-title svg {
+    color: oklch(0.78 0.16 34);
+    opacity: 0.9;
+}
+
+/* Bookmark Items - 清晰且不刺眼 */
+.dark:has([class*="theme-midnight-slate"]) .bookmark-item {
+    border-radius: 12px;
+    padding: 0.45rem 0.8rem;
+    margin-bottom: 0.2rem;
+    transition: all 0.18s ease;
+}
+
+.dark:has([class*="theme-midnight-slate"]) .bookmark-item:hover {
+    background-color: oklch(0.4 0.04 264 / 0.3);
+    transform: translateX(5px);
+}
+
+.dark:has([class*="theme-midnight-slate"]) .bookmark-item-name {
+    color: oklch(0.9 0.012 264);
+    font-weight: 450;
+    opacity: 0.92;
+    transition: color 0.15s;
+}
+
+.dark:has([class*="theme-midnight-slate"]) .bookmark-item:hover .bookmark-item-name {
+    color: oklch(0.86 0.16 34);    /* 暖色高亮，与背景区分 */
+    opacity: 1;
+}
+
+/* 响应式微调 - 保持大屏清晰度 */
+@media (min-width: 640px) {
+    .dark:has([class*="theme-midnight-slate"]) {
+        --app-name-size: 16px;
+        --app-name-weight: 480;
+        --bm-title-size: 13.5px;
+        --bm-title-weight: 600;
+        --bm-item-size: 13px;
+        --bm-item-weight: 450;
+    }
+}
