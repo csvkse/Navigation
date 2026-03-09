@@ -1,0 +1,13 @@
+FROM mcr.microsoft.com/dotnet/runtime-deps:10.0 AS final
+ARG TARGETARCH
+WORKDIR /app
+EXPOSE 8080
+
+# 根据架构将预编译的二进制文件复制进镜像
+# TARGETARCH 会是 amd64 或 arm64
+COPY publish/${TARGETARCH}/ .
+
+# 确保二进制文件有执行权限
+RUN chmod +x ./Navigation
+
+ENTRYPOINT ["./Navigation"]

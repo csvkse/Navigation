@@ -130,7 +130,7 @@ static FastDataResult ToResult(FastData item)
     object? content;
     try
     {
-        content = JsonSerializer.Deserialize<JsonElement>(item.Content);
+        content = JsonSerializer.Deserialize(item.Content, AppJsonSerializerContext.Default.JsonElement);
     }
     catch
     {
