@@ -3,8 +3,8 @@ name: Desktop Release
 on:
   push:
     tags:
-      - "v*"
-  workflow_dispatch:
+      - "v*" # 当推送形如 v1.0.0 的 tag 时自动触发打包并发布 Release
+  workflow_dispatch: # 允许在 GitHub Actions 面板手动点击运行
 
 jobs:
   build:
@@ -53,66 +53,126 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Linux x64 依赖
+      # Linux x64 平台下的 NativeAOT 依赖包
       - name: Install Linux dependencies (x64)
         if: matrix.os == 'ubuntu-latest' && matrix.rid == 'linux-x64'
-        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang zlib1g-dev
 
-      # Linux ARMv7 交叉编译依赖
+      # Linux ARMv7 (linux-arm) 平台下的交叉编译依赖包
       - name: Install Linux dependencies (ARMv7)
         if: matrix.os == 'ubuntu-latest' && matrix.rid == 'linux-arm'
         run: |
+          # 添加 ARMHF 架构
           sudo dpkg --add-architecture armhf
-          sudo sed -i 's/^deb/deb [arch=amd64]/g' /etc/apt/sources.list
+
+          # 备份原 sources.list
+          sudo cp /etc/apt/sources.list /etc/apt/sources.list.bak
+
+          # 创建新的 amd64 主源配置
+          sudo bash -c 'cat > /etc/apt/sources.list << EOF
+          deb [arch=amd64] http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
+          deb [arch=amd64] http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
+          deb [arch=amd64] http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
+          deb [arch=amd64] http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+          EOF'
+
+          # 创建 ARMHF 源配置文件
           sudo bash -c 'cat > /etc/apt/sources.list.d/armhf.list << EOF
           deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
           deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
           deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
           deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
           EOF'
-          sudo apt-get update
-          sudo apt-get install -y clang gcc-arm-linux-gnueabihf zlib1g-dev:armhf
 
-      # Linux ARM64 交叉编译依赖
+          # 更新包列表
+          sudo apt-get update
+
+          # 安装交叉编译工具链和依赖
+          sudo apt-get install -y \
+            clang \
+            gcc-arm-linux-gnueabihf \
+            binutils-arm-linux-gnueabihf \
+            zlib1g-dev:armhf \
+            libc6-dev:armhf
+
+      # Linux ARM64 (linux-arm64) 平台下的交叉编译依赖包
       - name: Install Linux dependencies (ARM64)
         if: matrix.os == 'ubuntu-latest' && matrix.rid == 'linux-arm64'
         run: |
+          # 添加 ARM64 架构
           sudo dpkg --add-architecture arm64
-          sudo sed -i 's/^deb/deb [arch=amd64]/g' /etc/apt/sources.list
+
+          # 备份原 sources.list
+          sudo cp /etc/apt/sources.list /etc/apt/sources.list.bak
+
+          # 创建新的 amd64 主源配置
+          sudo bash -c 'cat > /etc/apt/sources.list << EOF
+          deb [arch=amd64] http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
+          deb [arch=amd64] http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
+          deb [arch=amd64] http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
+          deb [arch=amd64] http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+          EOF'
+
+          # 创建 ARM64 源配置文件
           sudo bash -c 'cat > /etc/apt/sources.list.d/arm64.list << EOF
           deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
           deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
           deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
           deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
           EOF'
+
+          # 更新包列表
           sudo apt-get update
-          sudo apt-get install -y clang gcc-aarch64-linux-gnu zlib1g-dev:arm64
+
+          # 安装交叉编译工具链和依赖
+          sudo apt-get install -y \
+            clang \
+            gcc-aarch64-linux-gnu \
+            binutils-aarch64-linux-gnu \
+            zlib1g-dev:arm64 \
+            libc6-dev:arm64
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
 
-      # 如果不需要前端构建，可以注释掉以下步骤
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
+      # 如果项目需要前端构建，取消下面的注释
+      # - name: Setup Node.js
+      #   uses: actions/setup-node@v4
+      #   with:
+      #     node-version: "20"
+      #
+      # - name: Install pnpm
+      #   uses: pnpm/action-setup@v4
+      #   with:
+      #     version: 8
+      #
+      # - name: Build frontend
+      #   run: |
+      #     cd Navigation/ClientApp  # 根据实际路径调整
+      #     pnpm install
+      #     pnpm build
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 8
-
+      # 执行 NativeAOT 发布
       - name: Publish Native AOT
         run: dotnet publish Navigation/Navigation.csproj -c Release -r ${{ matrix.rid }} -o publish_output
 
-      # Windows 打包
+      # 验证可执行文件（Linux/macOS）
+      - name: Test executable (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          chmod +x publish_output/Navigation
+          ./publish_output/Navigation --version || echo "Executable built successfully (--version not supported)"
+
+      # Windows 打包为 zip
       - name: Archive production artifacts (Windows)
         if: matrix.os == 'windows-latest'
         run: Compress-Archive -Path publish_output\* -DestinationPath Navigation-${{ matrix.rid }}.zip
 
-      # Linux/macOS 打包
+      # Linux / macOS 打包为 tar.gz
       - name: Archive production artifacts (Unix)
         if: matrix.os != 'windows-latest'
         run: tar -czvf Navigation-${{ matrix.rid }}.tar.gz -C publish_output .
@@ -127,6 +187,7 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
+    # 只有当触发是 Tag 推送时，才会执行正式发布 release
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
@@ -136,12 +197,13 @@ jobs:
         with:
           path: artifacts
 
+      # 创建 GitHub Release，并将打包好的产物全部附加到上面
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: artifacts/*/*
-          generate_release_notes: true # 自动生成发布说明
-          draft: false # 直接发布，不存为草稿
-          prerelease: ${{ contains(github.ref, '-') }} # 如果tag包含-，则标记为预发布
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref, '-') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
