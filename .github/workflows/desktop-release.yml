@@ -83,9 +83,7 @@ jobs:
           node-version: "20"
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 8
+        run: npm install -g pnpm@8
 
       # 执行发布工作 (开启 PublishAot=true 将编译出本机独立机器码)
       - name: Publish Native AOT

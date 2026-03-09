@@ -1,22 +1,30 @@
-name: Docker Build
+name: Docker Build (Native)
 
 on:
   push:
     tags:
       - "v*"
-  pull_request: # 添加 PR 触发用于测试
+  pull_request: # PR 触发用于测试
     branches: [main, master]
   workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # 阶段 1：使用矩阵在各自的原生机器上独立构建
   build:
-    runs-on: ubuntu-latest
-    # PR 时也允许运行，但不推送
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            os: ubuntu-latest
+          - platform: linux/arm64
+            os: ubuntu-24.04-arm
+
+    runs-on: ${{ matrix.os }}
+    # 权限设置
     permissions:
       contents: read
       packages: write
@@ -24,17 +32,19 @@ jobs:
 
     steps:
       - name: Checkout repository
+        if: github.event_name != 'pull_request' || matrix.platform == 'linux/amd64'
         uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      # 将仓库名强制转换为小写，防止 Docker 报错
+      - name: Set lower case repository name
+        if: github.event_name != 'pull_request' || matrix.platform == 'linux/amd64'
+        run: echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to the Container registry
-        # 只有 tag 推送或手动触发时才登录（PR 不登录）
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && (github.event_name != 'pull_request' || matrix.platform == 'linux/amd64')
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -46,25 +56,86 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      # 核心步骤：原生构建，如果是正式发布则只推送 Digest（不打标签）
+      - name: Build and push by digest
+        if: github.event_name != 'pull_request' || matrix.platform == 'linux/amd64'
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Navigation/Dockerfile
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=build-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=build-${{ matrix.platform }}
+          # PR 时完全不推送，Tag 发布时只推送按 Digest 索引的镜像
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ github.event_name != 'pull_request' }}
+
+      # 提取刚才推送镜像的 Sha256 值，作为一个空文件保存
+      - name: Export digest
+        if: github.event_name != 'pull_request' && (github.event_name != 'pull_request' || matrix.platform == 'linux/amd64')
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      # 将这个文件作为构建产物上传，供合并任务使用
+      - name: Upload digest
+        if: github.event_name != 'pull_request' && (github.event_name != 'pull_request' || matrix.platform == 'linux/amd64')
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # 阶段 2：收集产物，合并为多架构 Manifest 并打上最终标签
+  merge:
+    runs-on: ubuntu-latest
+    needs: build
+    # 只有正式发布（非 PR）才执行清单合并
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Set lower case repository name
+        run: echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
+
+      # 下载前面两个独立任务上传的 Digest 产物，并合并到一个文件夹里
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 在合并阶段生成最终的标签（例如 v1.0.0, latest）
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            # 只有主分支才打 latest 标签
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
-            type=ref,event=branch
-            type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha,format=short
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: Navigation/Dockerfile
-          # PR 时只构建 amd64（更快），tag 时构建多平台
-          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
-          # 只有非 PR 事件才推送
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      # 利用 buildx imagetools 把零散的 Digest 组装成一个多架构镜像
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
