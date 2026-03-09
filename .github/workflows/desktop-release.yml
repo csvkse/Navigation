@@ -15,7 +15,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Windows
           - os: windows-latest
             rid: win-x64
             target_name: Windows x64
@@ -24,18 +23,17 @@ jobs:
             rid: win-arm64
             target_name: Windows ARM64
             archive_ext: zip
-
-          # Linux (只保留 x64)
           - os: ubuntu-latest
             rid: linux-x64
             target_name: Linux x64
             archive_ext: tar.gz
-          # Linux ARMv7 和 ARM64 已取消
-
-          # macOS
-          - os: macos-latest
-            rid: osx-x64
-            target_name: macOS Intel
+          - os: ubuntu-latest
+            rid: linux-arm
+            target_name: Linux ARMv7
+            archive_ext: tar.gz
+          - os: ubuntu-latest
+            rid: linux-arm64
+            target_name: Linux ARM64
             archive_ext: tar.gz
           - os: macos-latest
             rid: osx-arm64
@@ -46,64 +44,85 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 提取版本号
+      - name: Get version
+        id: get_version
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=manual-build-$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+
       # Linux x64 平台下的 NativeAOT 依赖包
       - name: Install Linux dependencies (x64)
         if: matrix.os == 'ubuntu-latest' && matrix.rid == 'linux-x64'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang zlib1g-dev
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
 
-      # Linux ARM 依赖安装步骤已全部移除
+      # Linux ARM 平台依赖
+      - name: Install Linux ARM dependencies
+        if: matrix.os == 'ubuntu-latest' && (matrix.rid == 'linux-arm' || matrix.rid == 'linux-arm64')
+        run: sudo apt-get update && sudo apt-get install -y clang llvm
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
 
-      # 如果项目需要前端构建，取消下面的注释
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      # 缓存 NuGet 包
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
         with:
-          node-version: "20"
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 8
-
-      - name: Build frontend
-        run: |
-          cd Navigation/ClientApp  # 根据实际路径调整
-          pnpm install
-          pnpm build
-
-      # 执行 NativeAOT 发布
+      # 执行发布工作
       - name: Publish Native AOT
-        run: dotnet publish Navigation/Navigation.csproj -c Release -r ${{ matrix.rid }} -o publish_output
+        run: dotnet publish Navigation/Navigation.csproj -c Release -r ${{ matrix.rid }} -o publish_output --self-contained true
 
-      # 验证可执行文件（Linux/macOS）
-      - name: Test executable (Unix)
-        if: matrix.os != 'windows-latest'
+      # 验证构建输出
+      - name: Verify build output
         run: |
-          chmod +x publish_output/Navigation
-          ./publish_output/Navigation --version || echo "Executable built successfully (--version not supported)"
+          if [ ! -d "publish_output" ] || [ -z "$(ls -A publish_output)" ]; then
+            echo "❌ Build output is empty!"
+            exit 1
+          else
+            echo "✅ Build output verified: $(ls -la publish_output | wc -l) files"
+          fi
+        shell: bash
 
-      # Windows 打包为 zip
+      # Windows 打包为 zip（带版本号）
       - name: Archive production artifacts (Windows)
         if: matrix.os == 'windows-latest'
-        run: Compress-Archive -Path publish_output\* -DestinationPath Navigation-${{ matrix.rid }}.zip
+        run: |
+          $version = "${{ steps.get_version.outputs.VERSION }}"
+          Compress-Archive -Path publish_output\* -DestinationPath Navigation-${{ matrix.rid }}-$version.zip
+          Write-Host "✅ Created archive: Navigation-${{ matrix.rid }}-$version.zip"
 
-      # Linux / macOS 打包为 tar.gz
+      # Linux / macOS 打包为 tar.gz（带版本号）
       - name: Archive production artifacts (Unix)
         if: matrix.os != 'windows-latest'
-        run: tar -czvf Navigation-${{ matrix.rid }}.tar.gz -C publish_output .
+        run: |
+          version="${{ steps.get_version.outputs.VERSION }}"
+          # 创建包含版本号的目录名以便打包
+          mkdir -p Navigation-${{ matrix.rid }}-$version
+          cp -r publish_output/* Navigation-${{ matrix.rid }}-$version/
+          tar -czvf Navigation-${{ matrix.rid }}-$version.tar.gz Navigation-${{ matrix.rid }}-$version/
+          echo "✅ Created archive: Navigation-${{ matrix.rid }}-$version.tar.gz"
 
       # 上传构建产物
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Navigation-${{ matrix.rid }}
-          path: Navigation-${{ matrix.rid }}.${{ matrix.archive_ext }}
+          name: Navigation-${{ matrix.rid }}-${{ steps.get_version.outputs.VERSION }}
+          path: |
+            Navigation-${{ matrix.rid }}-${{ steps.get_version.outputs.VERSION }}.${{ matrix.archive_ext }}
+            Navigation-${{ matrix.rid }}-${{ steps.get_version.outputs.VERSION }}.zip
+          if-no-files-found: error
+          retention-days: 30
 
   release:
     needs: build
@@ -112,19 +131,77 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
+      discussions: write # 可选：如果需要创建讨论
+
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 获取完整历史用于生成 release notes
+
+      - name: Get version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          merge-multiple: false
 
-      # 创建 GitHub Release，并将打包好的产物全部附加到上面
+      # 列出下载的 artifacts
+      - name: List artifacts
+        run: |
+          echo "📦 Downloaded artifacts:"
+          ls -la artifacts/
+          echo ""
+          echo "📁 Contents:"
+          find artifacts -type f -name "*.zip" -o -name "*.tar.gz" | sort
+
+      # 创建 GitHub Release
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*/*
-          generate_release_notes: true
+          name: Release v${{ steps.get_version.outputs.VERSION }}
+          tag_name: ${{ github.ref_name }}
+          body: |
+            ## 🚀 Navigation Desktop v${{ steps.get_version.outputs.VERSION }}
+
+            ### 📥 Downloads
+            - **Windows x64**: `Navigation-win-x64-${{ steps.get_version.outputs.VERSION }}.zip`
+            - **Windows ARM64**: `Navigation-win-arm64-${{ steps.get_version.outputs.VERSION }}.zip`
+            - **Linux x64**: `Navigation-linux-x64-${{ steps.get_version.outputs.VERSION }}.tar.gz`
+            - **Linux ARMv7**: `Navigation-linux-arm-${{ steps.get_version.outputs.VERSION }}.tar.gz`
+            - **Linux ARM64**: `Navigation-linux-arm64-${{ steps.get_version.outputs.VERSION }}.tar.gz`
+            - **macOS Apple Silicon**: `Navigation-osx-arm64-${{ steps.get_version.outputs.VERSION }}.tar.gz`
+
+            ### ✨ Features
+            - Native AOT compiled for maximum performance
+            - No runtime dependencies required
+            - Cross-platform support
+
+            ### 🔧 System Requirements
+            - **Windows**: Windows 10/11 (x64 or ARM64)
+            - **Linux**: glibc 2.35+ (x64/ARMv7/ARM64)
+            - **macOS**: macOS 11+ (Apple Silicon)
+
+            ### 📝 Notes
+            - These are self-contained executables - no .NET runtime needed
+            - Built with .NET 10.0 and NativeAOT
           draft: false
-          prerelease: ${{ contains(github.ref, '-') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+          prerelease: false
+          files: |
+            artifacts/*/Navigation-*.zip
+            artifacts/*/Navigation-*.tar.gz
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 可选：验证 release 创建成功
+      - name: Verify release
+        run: |
+          echo "✅ Release v${{ steps.get_version.outputs.VERSION }} created successfully!"
+          echo "📊 Release assets:"
+          gh release view v${{ steps.get_version.outputs.VERSION }} --json assets --jq '.assets[].name'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
