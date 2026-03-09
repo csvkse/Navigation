@@ -1,0 +1,99 @@
+name: Desktop Release
+
+on:
+  push:
+    tags:
+      - "v*" # 当推送形如 v1.0.0 的 tag 时自动触发打包并发布 Release
+  workflow_dispatch: # 允许在 GitHub Actions 面板手动点击运行
+
+jobs:
+  build:
+    name: Build ${{ matrix.target_name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            target_name: Windows x64
+            archive_ext: zip
+          - os: ubuntu-latest
+            rid: linux-x64
+            target_name: Linux x64
+            archive_ext: tar.gz
+          - os: macos-13
+            rid: osx-x64
+            target_name: macOS Intel
+            archive_ext: tar.gz
+          - os: macos-latest
+            rid: osx-arm64
+            target_name: macOS Apple Silicon
+            archive_ext: tar.gz
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Linux 平台下需要安装 NativeAOT 对应的依赖包 (clang, zlib)
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
+      # 执行发布工作
+      # 由于 .csproj 已开启 PublishAot=true，这将在各个平台上编译出本机可独立运行的机器码（无需依赖 .NET 运行时）
+      - name: Publish Native AOT
+        run: dotnet publish Navigation/Navigation.csproj -c Release -r ${{ matrix.rid }} -o publish_output
+
+      # Windows 打包为 zip
+      - name: Archive production artifacts (Windows)
+        if: matrix.os == 'windows-latest'
+        run: Compress-Archive -Path publish_output\* -DestinationPath Navigation-${{ matrix.rid }}.zip
+
+      # Linux / macOS 打包为 tar.gz
+      - name: Archive production artifacts (Unix)
+        if: matrix.os != 'windows-latest'
+        run: tar -czvf Navigation-${{ matrix.rid }}.tar.gz -C publish_output .
+
+      # 上传构建产物 (在 Actions 的页面中可以直接下载该构建)
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Navigation-${{ matrix.rid }}
+          path: Navigation-${{ matrix.rid }}.${{ matrix.archive_ext }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    # 只有当触发是 Tag 推送时，才会执行正式发布 release
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      # 创建 GitHub Release，并将打包好的 zip 和 tar.gz 产物全部附加到上面
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
