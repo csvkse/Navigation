@@ -34,15 +34,8 @@ jobs:
       - name: Set build matrix
         id: set-matrix
         run: |
-          # 定义全平台构建矩阵
-          FULL_MATRIX='{"include":[
-            {"os":"windows-latest","rid":"win-x64","target_name":"Windows x64","archive_ext":"zip"},
-            {"os":"windows-latest","rid":"win-arm64","target_name":"Windows ARM64","archive_ext":"zip"},
-            {"os":"ubuntu-latest","rid":"linux-x64","target_name":"Linux x64","archive_ext":"tar.gz"},
-            {"os":"ubuntu-24.04-arm","rid":"linux-arm64","target_name":"Linux ARM64","archive_ext":"tar.gz"},
-            {"os":"macos-latest","rid":"osx-arm64","target_name":"macOS Apple Silicon","archive_ext":"tar.gz"},
-            {"os":"macos-13","rid":"osx-x64","target_name":"macOS Intel","archive_ext":"tar.gz"}
-          ]}'
+          # 定义全平台构建矩阵 - 使用单行格式避免格式问题
+          FULL_MATRIX='{"include":[{"os":"windows-latest","rid":"win-x64","target_name":"Windows x64","archive_ext":"zip"},{"os":"windows-latest","rid":"win-arm64","target_name":"Windows ARM64","archive_ext":"zip"},{"os":"ubuntu-latest","rid":"linux-x64","target_name":"Linux x64","archive_ext":"tar.gz"},{"os":"ubuntu-24.04-arm","rid":"linux-arm64","target_name":"Linux ARM64","archive_ext":"tar.gz"},{"os":"macos-latest","rid":"osx-arm64","target_name":"macOS Apple Silicon","archive_ext":"tar.gz"},{"os":"macos-13","rid":"osx-x64","target_name":"macOS Intel","archive_ext":"tar.gz"}]}'
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             # 手动触发：根据用户选择决定构建内容

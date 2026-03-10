@@ -36,39 +36,13 @@ jobs:
       - name: Set build matrix
         id: set-matrix
         run: |
-          # 定义全平台构建矩阵
-          FULL_MATRIX='{"include":[
-            {"platform":"linux/amd64","os":"ubuntu-latest"},
-            {"platform":"linux/arm64","os":"ubuntu-24.04-arm"}
-          ]}'
-
+          # 定义全平台构建矩阵 - 使用单行格式避免格式问题
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # 手动触发：根据用户选择决定构建内容
-            if [ "${{ github.event.inputs.build_all }}" = "true" ]; then
-              # 用户选择构建所有平台
-              echo "matrix=${FULL_MATRIX}" >> $GITHUB_OUTPUT
-              echo "手动触发：构建所有平台"
-            else
-              # 用户选择单个平台
-              case "${{ github.event.inputs.platform }}" in
-                "linux/amd64")
-                  echo 'matrix={"include":[{"platform":"linux/amd64","os":"ubuntu-latest"}]}' >> $GITHUB_OUTPUT
-                  echo "手动触发：构建 linux/amd64"
-                  ;;
-                "linux/arm64")
-                  echo 'matrix={"include":[{"platform":"linux/arm64","os":"ubuntu-24.04-arm"}]}' >> $GITHUB_OUTPUT
-                  echo "手动触发：构建 linux/arm64"
-                  ;;
-              esac
-            fi
-          elif [ "${{ github.event_name }}" = "pull_request" ]; then
-            # PR 触发：构建所有平台用于测试
-            echo "matrix=${FULL_MATRIX}" >> $GITHUB_OUTPUT
-            echo "PR触发：构建所有平台（测试模式）"
+            # 手动触发：仅构建 Linux x64（方便快速测试）
+            echo 'matrix={"include":[{"os":"ubuntu-latest","rid":"linux-x64","target_name":"Linux x64","archive_ext":"tar.gz"}]}' >> $GITHUB_OUTPUT
           else
-            # Tag 推送：构建所有平台（正式发布）
-            echo "matrix=${FULL_MATRIX}" >> $GITHUB_OUTPUT
-            echo "标签推送：构建所有平台（正式发布）"
+            # Tag 推送：构建所有平台（全量发布）- 使用紧凑的单行格式
+            echo 'matrix={"include":[{"os":"windows-latest","rid":"win-x64","target_name":"Windows x64","archive_ext":"zip"},{"os":"windows-latest","rid":"win-arm64","target_name":"Windows ARM64","archive_ext":"zip"},{"os":"ubuntu-latest","rid":"linux-x64","target_name":"Linux x64","archive_ext":"tar.gz"},{"os":"ubuntu-24.04-arm","rid":"linux-arm64","target_name":"Linux ARM64","archive_ext":"tar.gz"},{"os":"macos-latest","rid":"osx-arm64","target_name":"macOS Apple Silicon","archive_ext":"tar.gz"},{"os":"macos-13","rid":"osx-x64","target_name":"macOS Intel","archive_ext":"tar.gz"}]}' >> $GITHUB_OUTPUT
           fi
 
   # 阶段 1：使用矩阵在各自的原生机器上独立构建
