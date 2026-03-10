@@ -35,7 +35,7 @@ jobs:
         id: set-matrix
         run: |
           # 定义全平台构建矩阵 - 使用完全单行格式
-          FULL_MATRIX='{"include":[{"os":"windows-latest","rid":"win-x64","target_name":"Windows x64","archive_ext":"zip"},{"os":"windows-latest","rid":"win-arm64","target_name":"Windows ARM64","archive_ext":"zip"},{"os":"ubuntu-latest","rid":"linux-x64","target_name":"Linux x64","archive_ext":"tar.gz"},{"os":"ubuntu-24.04-arm","rid":"linux-arm64","target_name":"Linux ARM64","archive_ext":"tar.gz"},{"os":"macos-latest","rid":"osx-arm64","target_name":"macOS Apple Silicon","archive_ext":"tar.gz"},{"os":"macos-13","rid":"osx-x64","target_name":"macOS Intel","archive_ext":"tar.gz"}]}'
+          FULL_MATRIX='{"include":[{"os":"windows-latest","rid":"win-x64","target_name":"Windows x64","archive_ext":"zip"},{"os":"windows-latest","rid":"win-arm64","target_name":"Windows ARM64","archive_ext":"zip"},{"os":"ubuntu-latest","rid":"linux-x64","target_name":"Linux x64","archive_ext":"tar.gz"},{"os":"ubuntu-24.04-arm","rid":"linux-arm64","target_name":"Linux ARM64","archive_ext":"tar.gz"},{"os":"macos-latest","rid":"osx-arm64","target_name":"macOS Apple Silicon","archive_ext":"tar.gz"}]}'
 
           # 移除所有可能的空白字符（包括换行符）
           FULL_MATRIX_CLEAN=$(echo "$FULL_MATRIX" | tr -d '\n' | tr -s ' ')
