@@ -316,7 +316,7 @@ const isInitialLoading = ref(currentKey.value === defaultKey ? false : links.val
 const appStore = useAppStore()
 
 if (currentKey.value && links.value.length === 0 && currentKey.value !== defaultKey) {
-    appStore.globalLoading = true
+    // appStore.globalLoading = true // Disable global full-screen mask, use skeleton instead
 }
 
 const saving = ref(false)
@@ -809,10 +809,12 @@ const fetchData = async (silent = false) => {
         const mergedLinks = newData.map((newItem: LinkRecord) => {
             const oldItem = currentIdMap.get(newItem.id)
             if (oldItem) {
-                // 如果更新时间一致，直接复用老对象，跳过高昂的 JSON.stringify()
-                if (oldItem.updateTime === newItem.updateTime) {
+                // If updateTime matches, skip deep comparison
+                if (newItem.updateTime && oldItem.updateTime === newItem.updateTime) {
                     return oldItem
                 }
+                
+                // fallback comparison for items without updateTime
                 const oldContentStr = JSON.stringify(oldItem.content)
                 const newContentStr = JSON.stringify(newItem.content)
 
@@ -1685,18 +1687,22 @@ const filteredLinks = computed(() => {
 
 const groupedBookmarks = computed(() => {
     const groups: Record<string, any[]> = {}
+    const defaultCat = t('tools.webNav.defaultCategory')
+    
+    // Grouping
     bookmarkGroups.value.forEach(link => {
-        const cat = link.content.category || t('tools.webNav.defaultCategory')
-        const group = groups[cat] || []
-        group.push(link)
-        groups[cat] = group
+        const cat = link.content.category || defaultCat
+        if (!groups[cat]) groups[cat] = []
+        groups[cat]!.push(link) // Use non-null assertion as it's initialized above
     })
 
-    const sortedGroups: Record<string, any[]> = {}
-    Object.keys(groups).sort().forEach(key => {
-        sortedGroups[key] = groups[key] || []
-    })
-    return sortedGroups
+    // Pre-sort keys to avoid repeated sorting in template
+    const sortedKeys = Object.keys(groups).sort()
+    const result: Record<string, any[]> = {}
+    for (const key of sortedKeys) {
+        result[key] = groups[key]! // Use non-null assertion as key comes from Object.keys
+    }
+    return result
 })
 
 const displayedLinks = computed(() => {
