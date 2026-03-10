@@ -861,6 +861,12 @@ const fetchData = async (silent = false) => {
             return newItem
         })
 
+        // Guard: 如果请求期间 key 已经变化，丢弃过期数据
+        if (currentKey.value !== currentKeySnap) {
+            console.warn('[fetchData] Key changed during fetch, discarding stale data', { requested: currentKeySnap, current: currentKey.value })
+            return
+        }
+
         if (hasMeaningfulChange) {
             links.value = mergedLinks
             localStorage.setItem(cacheKey, JSON.stringify(newData))
@@ -871,13 +877,16 @@ const fetchData = async (silent = false) => {
             toast.error('Failed to load data')
         }
     } finally {
-        loading.value = false
-        isInitialLoading.value = false
-        appStore.globalLoading = false
-        // 主动清除所有拦截标志，确保内容立即可见
-        if (typeof document !== 'undefined') {
-            document.documentElement.removeAttribute('data-app-loading')
-            document.documentElement.removeAttribute('data-app-session')
+        // 仅当 key 未变化时才清除 loading 状态，防止覆盖新请求的状态
+        if (currentKey.value === currentKeySnap) {
+            loading.value = false
+            isInitialLoading.value = false
+            appStore.globalLoading = false
+            // 主动清除所有拦截标志，确保内容立即可见
+            if (typeof document !== 'undefined') {
+                document.documentElement.removeAttribute('data-app-loading')
+                document.documentElement.removeAttribute('data-app-session')
+            }
         }
     }
 }
