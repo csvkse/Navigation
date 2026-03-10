@@ -27,10 +27,10 @@
                         </div>
 
                         <!-- Back Button -->
-                        <Button variant="ghost" size="icon" @click="handleBack"
+                        <!-- <Button variant="ghost" size="icon" @click="handleBack"
                             class="h-8 w-8 mb-6 sm:mb-8 rounded-xl bg-muted/10 border border-border/10 group">
                             <ChevronLeft class="h-4 w-4 text-muted-foreground/60 group-hover:text-primary" />
-                        </Button>
+                        </Button> -->
 
                         <!-- Auxiliary Info (Restored for Desktop) -->
                         <div
@@ -183,7 +183,7 @@
                                     </div>
                                     <div class="flex flex-col min-w-0">
                                         <span class="text-sm font-black truncate">{{ currentUser.username
-                                        }}</span>
+                                            }}</span>
                                         <span
                                             class="text-[11px] text-muted-foreground/60 font-mono tracking-tighter truncate">{{
                                                 currentUser.dataKey }}</span>
