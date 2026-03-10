@@ -186,10 +186,18 @@ jobs:
           echo "找到以下 digest 文件："
           ls -la
 
+          # 安全地将每个 digest 文件名与镜像前缀拼接
+          SOURCES=""
+          for f in *; do
+            SOURCES="${SOURCES} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:${f}"
+          done
+
+          echo "准备合并的镜像源: $SOURCES"
+
           # 创建并推送 manifest
           docker buildx imagetools create \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '%s@sha256:%s ' "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" *)
+            $SOURCES
 
           echo "Manifest 创建完成，标签："
           jq -r '.tags[]' <<< "$DOCKER_METADATA_OUTPUT_JSON"
