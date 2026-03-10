@@ -34,14 +34,17 @@ jobs:
       - name: Set build matrix
         id: set-matrix
         run: |
-          # 定义全平台构建矩阵 - 使用单行格式避免格式问题
+          # 定义全平台构建矩阵 - 使用完全单行格式
           FULL_MATRIX='{"include":[{"os":"windows-latest","rid":"win-x64","target_name":"Windows x64","archive_ext":"zip"},{"os":"windows-latest","rid":"win-arm64","target_name":"Windows ARM64","archive_ext":"zip"},{"os":"ubuntu-latest","rid":"linux-x64","target_name":"Linux x64","archive_ext":"tar.gz"},{"os":"ubuntu-24.04-arm","rid":"linux-arm64","target_name":"Linux ARM64","archive_ext":"tar.gz"},{"os":"macos-latest","rid":"osx-arm64","target_name":"macOS Apple Silicon","archive_ext":"tar.gz"},{"os":"macos-13","rid":"osx-x64","target_name":"macOS Intel","archive_ext":"tar.gz"}]}'
+
+          # 移除所有可能的空白字符（包括换行符）
+          FULL_MATRIX_CLEAN=$(echo "$FULL_MATRIX" | tr -d '\n' | tr -s ' ')
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             # 手动触发：根据用户选择决定构建内容
             if [ "${{ github.event.inputs.build_all }}" = "true" ]; then
               # 用户选择构建所有平台
-              echo "matrix=${FULL_MATRIX}" >> $GITHUB_OUTPUT
+              echo "matrix=${FULL_MATRIX_CLEAN}" >> $GITHUB_OUTPUT
               echo "构建所有平台"
             else
               # 用户选择单个平台
@@ -74,7 +77,7 @@ jobs:
             fi
           else
             # Tag 推送：构建所有平台（全量发布）
-            echo "matrix=${FULL_MATRIX}" >> $GITHUB_OUTPUT
+            echo "matrix=${FULL_MATRIX_CLEAN}" >> $GITHUB_OUTPUT
             echo "标签推送，构建所有平台"
           fi
 
