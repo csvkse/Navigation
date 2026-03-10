@@ -10,9 +10,9 @@ Navigation is a lightweight navigation and bookmark management project built wit
 
 ### Desktop Preview
 
-![Desktop Preview 1](./Navigation.Frontend/preview/1.png)
-![Desktop Preview 2](./Navigation.Frontend/preview/2.png)
 ![Desktop Preview 3](./Navigation.Frontend/preview/3.png)
+![Desktop Preview 2](./Navigation.Frontend/preview/2.png)
+![Desktop Preview 1](./Navigation.Frontend/preview/1.png)
 
 ### Mobile Preview
 
