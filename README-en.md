@@ -2,6 +2,8 @@
 
 [**English Version**](README-en.md) | [**简体中文版**](README.md)
 
+[**Update Log/更新日志**](Update.md)
+
 ## Introduction
 
 Navigation is a lightweight navigation and bookmark management project built with .NET 10 (AOT) + Vue 3 (Vite SSG). The backend uses ASP.NET Core with an SQLite database and integrates Scalar to provide an elegant OpenAPI interface. The frontend is built with Tailwind CSS and Reka UI, offering a smooth, modern interactive experience.

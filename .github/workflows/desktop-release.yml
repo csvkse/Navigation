@@ -5,6 +5,24 @@ on:
     tags:
       - "v*" # 当推送形如 v1.0.0 的 tag 时自动触发打包并发布 Release
   workflow_dispatch: # 允许在 GitHub Actions 面板手动点击运行
+    inputs:
+      build_all:
+        description: "构建所有平台"
+        required: true
+        default: false
+        type: boolean
+      platform:
+        description: "选择构建平台（当不构建所有平台时）"
+        required: true
+        default: "linux-x64"
+        type: choice
+        options:
+          - linux-x64
+          - linux-arm64
+          - win-x64
+          - win-arm64
+          - osx-arm64
+          - osx-x64
 
 jobs:
   # 准备阶段：根据触发方式动态生成构建矩阵
@@ -16,12 +34,55 @@ jobs:
       - name: Set build matrix
         id: set-matrix
         run: |
+          # 定义全平台构建矩阵
+          FULL_MATRIX='{"include":[
+            {"os":"windows-latest","rid":"win-x64","target_name":"Windows x64","archive_ext":"zip"},
+            {"os":"windows-latest","rid":"win-arm64","target_name":"Windows ARM64","archive_ext":"zip"},
+            {"os":"ubuntu-latest","rid":"linux-x64","target_name":"Linux x64","archive_ext":"tar.gz"},
+            {"os":"ubuntu-24.04-arm","rid":"linux-arm64","target_name":"Linux ARM64","archive_ext":"tar.gz"},
+            {"os":"macos-latest","rid":"osx-arm64","target_name":"macOS Apple Silicon","archive_ext":"tar.gz"},
+            {"os":"macos-13","rid":"osx-x64","target_name":"macOS Intel","archive_ext":"tar.gz"}
+          ]}'
+
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # 手动触发：仅构建 Linux x64
-            echo 'matrix={"include":[{"os":"windows-latest","rid":"win-arm64","target_name":"Windows ARM64","archive_ext":"zip"}]}' >> $GITHUB_OUTPUT
+            # 手动触发：根据用户选择决定构建内容
+            if [ "${{ github.event.inputs.build_all }}" = "true" ]; then
+              # 用户选择构建所有平台
+              echo "matrix=${FULL_MATRIX}" >> $GITHUB_OUTPUT
+              echo "构建所有平台"
+            else
+              # 用户选择单个平台
+              case "${{ github.event.inputs.platform }}" in
+                "linux-x64")
+                  echo 'matrix={"include":[{"os":"ubuntu-latest","rid":"linux-x64","target_name":"Linux x64","archive_ext":"tar.gz"}]}' >> $GITHUB_OUTPUT
+                  echo "构建 Linux x64"
+                  ;;
+                "linux-arm64")
+                  echo 'matrix={"include":[{"os":"ubuntu-24.04-arm","rid":"linux-arm64","target_name":"Linux ARM64","archive_ext":"tar.gz"}]}' >> $GITHUB_OUTPUT
+                  echo "构建 Linux ARM64"
+                  ;;
+                "win-x64")
+                  echo 'matrix={"include":[{"os":"windows-latest","rid":"win-x64","target_name":"Windows x64","archive_ext":"zip"}]}' >> $GITHUB_OUTPUT
+                  echo "构建 Windows x64"
+                  ;;
+                "win-arm64")
+                  echo 'matrix={"include":[{"os":"windows-latest","rid":"win-arm64","target_name":"Windows ARM64","archive_ext":"zip"}]}' >> $GITHUB_OUTPUT
+                  echo "构建 Windows ARM64"
+                  ;;
+                "osx-arm64")
+                  echo 'matrix={"include":[{"os":"macos-latest","rid":"osx-arm64","target_name":"macOS Apple Silicon","archive_ext":"tar.gz"}]}' >> $GITHUB_OUTPUT
+                  echo "构建 macOS Apple Silicon"
+                  ;;
+                "osx-x64")
+                  echo 'matrix={"include":[{"os":"macos-13","rid":"osx-x64","target_name":"macOS Intel","archive_ext":"tar.gz"}]}' >> $GITHUB_OUTPUT
+                  echo "构建 macOS Intel"
+                  ;;
+              esac
+            fi
           else
-            # Tag 推送：构建所有平台
-            echo 'matrix={"include":[{"os":"windows-latest","rid":"win-x64","target_name":"Windows x64","archive_ext":"zip"},{"os":"windows-latest","rid":"win-arm64","target_name":"Windows ARM64","archive_ext":"zip"},{"os":"ubuntu-latest","rid":"linux-x64","target_name":"Linux x64","archive_ext":"tar.gz"},{"os":"ubuntu-24.04-arm","rid":"linux-arm64","target_name":"Linux ARM64","archive_ext":"tar.gz"},{"os":"macos-latest","rid":"osx-arm64","target_name":"macOS Apple Silicon","archive_ext":"tar.gz"}]}' >> $GITHUB_OUTPUT
+            # Tag 推送：构建所有平台（全量发布）
+            echo "matrix=${FULL_MATRIX}" >> $GITHUB_OUTPUT
+            echo "标签推送，构建所有平台"
           fi
 
   build:
@@ -36,14 +97,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 1. Linux x64 平台下的 NativeAOT 依赖包
+      # Linux x64 平台下的 NativeAOT 依赖包
       - name: Install Linux dependencies (x64)
         if: matrix.os == 'ubuntu-latest' && matrix.rid == 'linux-x64'
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
-      # 2. Linux ARM64 原生编译依赖包
+
+      # Linux ARM64 原生编译依赖包
       - name: Install Linux dependencies (ARM64 Native)
         if: matrix.os == 'ubuntu-24.04-arm' && matrix.rid == 'linux-arm64'
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      # macOS 依赖（如果需要）
+      - name: Install macOS dependencies
+        if: startsWith(matrix.os, 'macos-')
+        run: |
+          if [ "${{ matrix.rid }}" = "osx-x64" ]; then
+            # Intel Mac 可能需要额外的配置
+            echo "Configuring for Intel Mac"
+          fi
+          brew install --cask osxfuse || true
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -78,6 +150,7 @@ jobs:
         with:
           name: Navigation-${{ matrix.rid }}
           path: Navigation-${{ matrix.rid }}.${{ matrix.archive_ext }}
+          retention-days: 7 # 保留7天，足够发布使用
 
   release:
     needs: build
@@ -91,43 +164,48 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: Navigation-*
+          merge-multiple: true
+
+      # 验证下载的产物
+      - name: List artifacts
+        run: |
+          echo "下载的产物列表："
+          ls -la artifacts/
+          echo "产物数量：$(ls -1 artifacts/ | wc -l)"
+
+      # 从 tag 获取版本号
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
       # 创建优化的 GitHub Release
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*/*
+          files: artifacts/*
           # 自动生成基于 Commit/PR 的更新日志
           generate_release_notes: true
           # 优化 Release 页面的文案展示
           body: |
-            🎉 **Navigation 桌面版更新发布**
+            # 🎉 Navigation 桌面版 ${{ steps.get_version.outputs.VERSION }} 发布
 
             本次发布包含适用于各个主要操作系统的原生独立运行程序（Native AOT）。
             **无需安装 .NET 运行时**，下载解压即可直接运行！
 
-            ### 📦 下载与运行指南
+            ## 📥 下载指南
 
-            * **🪟 Windows**: 
-                * 下载对应的 `.zip` 文件。
-                * 解压后直接双击运行 `Navigation.exe`。
-            * **🍎 macOS & 🐧 Linux**: 
-                * 下载对应的 `.tar.gz` 文件。
-                * 打开终端，解压文件：`tar -xzvf Navigation-*.tar.gz`。
-                * 赋予执行权限并运行：`chmod +x Navigation && ./Navigation`。
+            | 平台 | 架构 | 下载链接 | 说明 |
+            | :--- | :--- | :--- | :--- |
+            | 🪟 Windows | x64 | `Navigation-win-x64.zip` | 适用于绝大多数 Windows 电脑（Intel/AMD 64位） |
+            | 🪟 Windows | ARM64 | `Navigation-win-arm64.zip` | 适用于 Windows on ARM 设备（如 Surface Pro X） |
+            | 🐧 Linux | x64 | `Navigation-linux-x64.tar.gz` | 适用于绝大多数 Linux 电脑（Intel/AMD 64位） |
+            | 🐧 Linux | ARM64 | `Navigation-linux-arm64.tar.gz` | 适用于 ARM64 架构的 Linux 设备 |
+            | 🍎 macOS | Apple Silicon | `Navigation-osx-arm64.tar.gz` | 适用于 M1/M2/M3/M4 系列 Mac |
+            | 🍎 macOS | Intel | `Navigation-osx-x64.tar.gz` | 适用于 Intel 芯片的 Mac |
 
-            ---
+            ## 🚀 运行方法
 
-            ### 💻 架构选择说明
-
-            | 架构标识 | 适用设备说明 |
-            | :--- | :--- |
-            | **`x64`** | 适用于绝大多数普通电脑（Intel / AMD 处理器）。 |
-            | **`arm64`** | 适用于 Apple Silicon (M1/M2/M3 等 Mac)、Windows on ARM 设备及大部分现代 ARM 架构的 Linux 服务器和高端开发板。 |
-            | **`arm`** | 适用于较老的 32 位 ARM Linux 设备（例如老款树莓派）。 |
-
-            ---
-
-            *💡 详细的代码更新日志请参考下方自动生成的 Release Notes 👇*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            ### Windows
+            ```bash
+            # 解压 zip 文件，双击运行 Navigation.exe 即可

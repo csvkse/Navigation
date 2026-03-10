@@ -4,9 +4,23 @@ on:
   push:
     tags:
       - "v*"
-  pull_request: # PR 触发用于测试
+  pull_request:
     branches: [main, master]
   workflow_dispatch:
+    inputs:
+      build_all:
+        description: "构建所有平台"
+        required: true
+        default: false
+        type: boolean
+      platform:
+        description: "选择构建平台（当不构建所有平台时）"
+        required: true
+        default: "linux/amd64"
+        type: choice
+        options:
+          - linux/amd64
+          - linux/arm64
 
 env:
   REGISTRY: ghcr.io
@@ -22,12 +36,39 @@ jobs:
       - name: Set build matrix
         id: set-matrix
         run: |
+          # 定义全平台构建矩阵
+          FULL_MATRIX='{"include":[
+            {"platform":"linux/amd64","os":"ubuntu-latest"},
+            {"platform":"linux/arm64","os":"ubuntu-24.04-arm"}
+          ]}'
+
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # 手动触发：仅构建 linux/amd64
-            echo 'matrix={"include":[{"platform":"linux/amd64","os":"ubuntu-latest"}]}' >> $GITHUB_OUTPUT
+            # 手动触发：根据用户选择决定构建内容
+            if [ "${{ github.event.inputs.build_all }}" = "true" ]; then
+              # 用户选择构建所有平台
+              echo "matrix=${FULL_MATRIX}" >> $GITHUB_OUTPUT
+              echo "手动触发：构建所有平台"
+            else
+              # 用户选择单个平台
+              case "${{ github.event.inputs.platform }}" in
+                "linux/amd64")
+                  echo 'matrix={"include":[{"platform":"linux/amd64","os":"ubuntu-latest"}]}' >> $GITHUB_OUTPUT
+                  echo "手动触发：构建 linux/amd64"
+                  ;;
+                "linux/arm64")
+                  echo 'matrix={"include":[{"platform":"linux/arm64","os":"ubuntu-24.04-arm"}]}' >> $GITHUB_OUTPUT
+                  echo "手动触发：构建 linux/arm64"
+                  ;;
+              esac
+            fi
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            # PR 触发：构建所有平台用于测试
+            echo "matrix=${FULL_MATRIX}" >> $GITHUB_OUTPUT
+            echo "PR触发：构建所有平台（测试模式）"
           else
-            # Tag 推送 / PR：构建所有平台
-            echo 'matrix={"include":[{"platform":"linux/amd64","os":"ubuntu-latest"},{"platform":"linux/arm64","os":"ubuntu-24.04-arm"}]}' >> $GITHUB_OUTPUT
+            # Tag 推送：构建所有平台（正式发布）
+            echo "matrix=${FULL_MATRIX}" >> $GITHUB_OUTPUT
+            echo "标签推送：构建所有平台（正式发布）"
           fi
 
   # 阶段 1：使用矩阵在各自的原生机器上独立构建
@@ -38,7 +79,6 @@ jobs:
       matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
 
     runs-on: ${{ matrix.os }}
-    # 权限设置：构建阶段通常不需要 packages: write 权限，只需读取代码即可（推送操作由 token 控制）
     permissions:
       contents: read
       packages: write
@@ -46,18 +86,15 @@ jobs:
 
     steps:
       - name: Checkout repository
-        if: github.event_name != 'pull_request' || matrix.platform == 'linux/amd64'
         uses: actions/checkout@v4
 
       - name: Set lower case repository name
-        if: github.event_name != 'pull_request' || matrix.platform == 'linux/amd64'
         run: echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
 
       - name: Set up Docker Buildx
-        if: github.event_name != 'pull_request' || matrix.platform == 'linux/amd64'
         uses: docker/setup-buildx-action@v3
 
-      # 优化点：PR 测试完全不需要登录镜像仓库
+      # PR 测试不需要登录镜像仓库
       - name: Log in to the Container registry
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
@@ -67,15 +104,18 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata (tags, labels) for Docker
-        if: github.event_name != 'pull_request' || matrix.platform == 'linux/amd64'
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value={{branch}}-{{sha}}
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
 
-      # 核心步骤：原生构建，如果是正式发布则只推送 Digest（不打标签）
+      # 核心步骤：原生构建
       - name: Build and push by digest
-        if: github.event_name != 'pull_request' || matrix.platform == 'linux/amd64'
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -85,9 +125,10 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=build-${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=build-${{ matrix.platform }}
+          # PR事件不推送，其他事件推送digest
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ github.event_name != 'pull_request' }}
 
-      # 优化点：简化布尔逻辑。原逻辑 A && (A || B) 直接等价于 A
+      # 导出 digest（仅非 PR 事件）
       - name: Export digest
         if: github.event_name != 'pull_request'
         run: |
@@ -99,7 +140,7 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: digests-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+          name: digests-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}-${{ github.sha }}
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
@@ -108,6 +149,7 @@ jobs:
   merge:
     runs-on: ubuntu-latest
     needs: build
+    # 只在标签推送或手动触发（且推送了镜像）时执行合并
     if: github.event_name != 'pull_request'
     permissions:
       contents: read
@@ -121,7 +163,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: /tmp/digests
-          pattern: digests-*
+          pattern: digests-*-${{ github.sha }}
           merge-multiple: true
 
       - name: Set up Docker Buildx
@@ -143,9 +185,33 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha,format=short
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
 
       - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
-          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+          # 检查是否有digest文件
+          if [ -z "$(ls -A .)" ]; then
+            echo "错误：没有找到任何 digest 文件"
+            exit 1
+          fi
+
+          echo "找到以下 digest 文件："
+          ls -la
+
+          # 创建并推送 manifest
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
+
+          echo "Manifest 创建完成，标签："
+          jq -r '.tags[]' <<< "$DOCKER_METADATA_OUTPUT_JSON"
+
+      # 验证推送的 manifest
+      - name: Verify manifest
+        run: |
+          echo "验证多架构 manifest："
+          for tag in $(jq -r '.tags[]' <<< "$DOCKER_METADATA_OUTPUT_JSON"); do
+            echo "检查 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${tag}"
+            docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${tag}
+          done
