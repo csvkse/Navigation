@@ -14,13 +14,9 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// 确保 data 目录存在，将数据库放在独立目录中以支持 Docker Volume 挂载
-var dataDir = Path.Combine(AppContext.BaseDirectory, "data");
-Directory.CreateDirectory(dataDir);
-// 打印目录路径
-Console.WriteLine($"InitFastDB 数据库目录: {dataDir}");
-Console.WriteLine($"InitFastDB 数据库文件完整路径: {Path.Combine(dataDir, "fastdb.db")}");
-builder.Services.AddSingleton<FastDbService>(_ => new FastDbService(Path.Combine(dataDir, "fastdb.db")));
+// 将数据库放在独立目录中以支持 Docker Volume 挂载
+var dbPath = Path.Combine(AppContext.BaseDirectory, "data", "fastdb.db");
+builder.Services.AddSingleton<FastDbService>(_ => new FastDbService(dbPath));
 
 
 // 添加 CORS 服务

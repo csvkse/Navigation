@@ -14,13 +14,14 @@ public class FastDbService : IDisposable
 
     public FastDbService(string dbPath = "fastdb.db")
     {
-        var dataDir = Path.Combine(AppContext.BaseDirectory, "data");
-        Directory.CreateDirectory(dataDir);
-        var dbFilePath = Path.Combine(dataDir, dbPath);
-        // 打印目录路径
-        Console.WriteLine($"FastDB 数据库目录: {dataDir}");
-        Console.WriteLine($"FastDB 数据库文件完整路径: {dbFilePath}");
-        _connection = new SqliteConnection($"Data Source={dbFilePath}");
+        // 确保数据库文件所在目录存在
+        var dir = Path.GetDirectoryName(dbPath);
+        if (!string.IsNullOrEmpty(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+        Console.WriteLine($"FastDB 数据库文件路径: {dbPath}");
+        _connection = new SqliteConnection($"Data Source={dbPath}");
         _connection.Open();
         InitializeDatabase();
     }
