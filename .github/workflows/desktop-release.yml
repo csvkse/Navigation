@@ -90,25 +90,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Linux x64 平台下的 NativeAOT 依赖包
+      # 1. Linux x64 平台下的 NativeAOT 依赖包
       - name: Install Linux dependencies (x64)
         if: matrix.os == 'ubuntu-latest' && matrix.rid == 'linux-x64'
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
 
-      # Linux ARM64 原生编译依赖包
+      # 2. Linux ARM64 原生编译依赖包
       - name: Install Linux dependencies (ARM64 Native)
         if: matrix.os == 'ubuntu-24.04-arm' && matrix.rid == 'linux-arm64'
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
-
-      # macOS 依赖 - 使用 macfuse 替代已弃用的 osxfuse
-      - name: Install macOS dependencies
-        if: startsWith(matrix.os, 'macos-')
-        run: |
-          echo "Configuring for ${{ matrix.rid }}"
-          # 使用 macfuse 替代 osxfuse（兼容 Apple Silicon 和 Intel）
-          brew install --cask macfuse || brew install macos-fuse-t/homebrew-cask/fuse-t
-          # 如果项目不需要 FUSE，可以注释掉上面的行，或使用 true 命令忽略错误
-          # true  # 占位符，如果不需要 FUSE 依赖
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -143,7 +133,6 @@ jobs:
         with:
           name: Navigation-${{ matrix.rid }}
           path: Navigation-${{ matrix.rid }}.${{ matrix.archive_ext }}
-          retention-days: 7 # 保留7天，足够发布使用
 
   release:
     needs: build
@@ -157,48 +146,43 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          pattern: Navigation-*
-          merge-multiple: true
-
-      # 验证下载的产物
-      - name: List artifacts
-        run: |
-          echo "下载的产物列表："
-          ls -la artifacts/
-          echo "产物数量：$(ls -1 artifacts/ | wc -l)"
-
-      # 从 tag 获取版本号
-      - name: Get version from tag
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
       # 创建优化的 GitHub Release
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*
+          files: artifacts/*/*
           # 自动生成基于 Commit/PR 的更新日志
           generate_release_notes: true
           # 优化 Release 页面的文案展示
           body: |
-            # 🎉 Navigation 桌面版 ${{ steps.get_version.outputs.VERSION }} 发布
+            🎉 **Navigation 桌面版更新发布**
 
             本次发布包含适用于各个主要操作系统的原生独立运行程序（Native AOT）。
             **无需安装 .NET 运行时**，下载解压即可直接运行！
 
-            ## 📥 下载指南
+            ### 📦 下载与运行指南
 
-            | 平台 | 架构 | 下载链接 | 说明 |
-            | :--- | :--- | :--- | :--- |
-            | 🪟 Windows | x64 | `Navigation-win-x64.zip` | 适用于绝大多数 Windows 电脑（Intel/AMD 64位） |
-            | 🪟 Windows | ARM64 | `Navigation-win-arm64.zip` | 适用于 Windows on ARM 设备（如 Surface Pro X） |
-            | 🐧 Linux | x64 | `Navigation-linux-x64.tar.gz` | 适用于绝大多数 Linux 电脑（Intel/AMD 64位） |
-            | 🐧 Linux | ARM64 | `Navigation-linux-arm64.tar.gz` | 适用于 ARM64 架构的 Linux 设备（如树莓派 4/5） |
-            | 🍎 macOS | Apple Silicon | `Navigation-osx-arm64.tar.gz` | 适用于 M1/M2/M3/M4 系列 Mac |
-            | 🍎 macOS | Intel | `Navigation-osx-x64.tar.gz` | 适用于 Intel 芯片的 Mac |
+            * **🪟 Windows**: 
+                * 下载对应的 `.zip` 文件。
+                * 解压后直接双击运行 `Navigation.exe`。
+            * **🍎 macOS & 🐧 Linux**: 
+                * 下载对应的 `.tar.gz` 文件。
+                * 打开终端，解压文件：`tar -xzvf Navigation-*.tar.gz`。
+                * 赋予执行权限并运行：`chmod +x Navigation && ./Navigation`。
 
-            ## 🚀 运行方法
+            ---
 
-            ### Windows
-            ```bash
-            # 解压 zip 文件，双击运行 Navigation.exe 即可
+            ### 💻 架构选择说明
+
+            | 架构标识 | 适用设备说明 |
+            | :--- | :--- |
+            | **`x64`** | 适用于绝大多数普通电脑（Intel / AMD 处理器）。 |
+            | **`arm64`** | 适用于 Apple Silicon (M1/M2/M3 等 Mac)、Windows on ARM 设备及大部分现代 ARM 架构的 Linux 服务器和高端开发板。 |
+            | **`arm`** | 适用于较老的 32 位 ARM Linux 设备（例如老款树莓派）。 |
+
+            ---
+
+            *💡 详细的代码更新日志请参考下方自动生成的 Release Notes 👇*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
