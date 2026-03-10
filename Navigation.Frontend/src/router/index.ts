@@ -1,7 +1,7 @@
 import type { RouteRecordRaw } from 'vue-router'
 
 export const routes: RouteRecordRaw[] = [
-  { path: '/', name: 'web-nav', component: () => import('@/views/Pages/Tools/WebNav.vue') },
+  { path: '/:key?', name: 'web-nav', component: () => import('@/views/Pages/Tools/WebNav.vue') },
   { path: '/tools/web-nav/:key?', name: 'web-nav-key', component: () => import('@/views/Pages/Tools/WebNav.vue') },
 ]
 
