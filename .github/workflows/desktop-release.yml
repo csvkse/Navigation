@@ -34,51 +34,48 @@ jobs:
       - name: Set build matrix
         id: set-matrix
         run: |
-          # 定义全平台构建矩阵 - 使用完全单行格式
-          FULL_MATRIX='{"include":[{"os":"windows-latest","rid":"win-x64","target_name":"Windows x64","archive_ext":"zip"},{"os":"windows-latest","rid":"win-arm64","target_name":"Windows ARM64","archive_ext":"zip"},{"os":"ubuntu-latest","rid":"linux-x64","target_name":"Linux x64","archive_ext":"tar.gz"},{"os":"ubuntu-24.04-arm","rid":"linux-arm64","target_name":"Linux ARM64","archive_ext":"tar.gz"},{"os":"macos-latest","rid":"osx-arm64","target_name":"macOS Apple Silicon","archive_ext":"tar.gz"}]}'
-
-          # 移除所有可能的空白字符（包括换行符）
-          FULL_MATRIX_CLEAN=$(echo "$FULL_MATRIX" | tr -d '\n' | tr -s ' ')
+          # 定义全平台构建矩阵 - 使用完全单行格式，包含 macOS Intel (osx-x64)
+          FULL_MATRIX='{"include":[{"os":"windows-latest","rid":"win-x64","target_name":"Windows x64","archive_ext":"zip"},{"os":"windows-latest","rid":"win-arm64","target_name":"Windows ARM64","archive_ext":"zip"},{"os":"ubuntu-latest","rid":"linux-x64","target_name":"Linux x64","archive_ext":"tar.gz"},{"os":"ubuntu-24.04-arm","rid":"linux-arm64","target_name":"Linux ARM64","archive_ext":"tar.gz"},{"os":"macos-latest","rid":"osx-arm64","target_name":"macOS Apple Silicon","archive_ext":"tar.gz"},{"os":"macos-13","rid":"osx-x64","target_name":"macOS Intel","archive_ext":"tar.gz"}]}'
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             # 手动触发：根据用户选择决定构建内容
             if [ "${{ github.event.inputs.build_all }}" = "true" ]; then
-              # 用户选择构建所有平台
-              echo "matrix=${FULL_MATRIX_CLEAN}" >> $GITHUB_OUTPUT
-              echo "构建所有平台"
+              # 用户选择构建所有平台 - 直接输出完整矩阵
+              echo "matrix=${FULL_MATRIX}" >> $GITHUB_OUTPUT
+              echo "手动触发：构建所有平台"
             else
               # 用户选择单个平台
               case "${{ github.event.inputs.platform }}" in
                 "linux-x64")
                   echo 'matrix={"include":[{"os":"ubuntu-latest","rid":"linux-x64","target_name":"Linux x64","archive_ext":"tar.gz"}]}' >> $GITHUB_OUTPUT
-                  echo "构建 Linux x64"
+                  echo "手动触发：构建 Linux x64"
                   ;;
                 "linux-arm64")
                   echo 'matrix={"include":[{"os":"ubuntu-24.04-arm","rid":"linux-arm64","target_name":"Linux ARM64","archive_ext":"tar.gz"}]}' >> $GITHUB_OUTPUT
-                  echo "构建 Linux ARM64"
+                  echo "手动触发：构建 Linux ARM64"
                   ;;
                 "win-x64")
                   echo 'matrix={"include":[{"os":"windows-latest","rid":"win-x64","target_name":"Windows x64","archive_ext":"zip"}]}' >> $GITHUB_OUTPUT
-                  echo "构建 Windows x64"
+                  echo "手动触发：构建 Windows x64"
                   ;;
                 "win-arm64")
                   echo 'matrix={"include":[{"os":"windows-latest","rid":"win-arm64","target_name":"Windows ARM64","archive_ext":"zip"}]}' >> $GITHUB_OUTPUT
-                  echo "构建 Windows ARM64"
+                  echo "手动触发：构建 Windows ARM64"
                   ;;
                 "osx-arm64")
                   echo 'matrix={"include":[{"os":"macos-latest","rid":"osx-arm64","target_name":"macOS Apple Silicon","archive_ext":"tar.gz"}]}' >> $GITHUB_OUTPUT
-                  echo "构建 macOS Apple Silicon"
+                  echo "手动触发：构建 macOS Apple Silicon"
                   ;;
                 "osx-x64")
                   echo 'matrix={"include":[{"os":"macos-13","rid":"osx-x64","target_name":"macOS Intel","archive_ext":"tar.gz"}]}' >> $GITHUB_OUTPUT
-                  echo "构建 macOS Intel"
+                  echo "手动触发：构建 macOS Intel"
                   ;;
               esac
             fi
           else
             # Tag 推送：构建所有平台（全量发布）
-            echo "matrix=${FULL_MATRIX_CLEAN}" >> $GITHUB_OUTPUT
-            echo "标签推送，构建所有平台"
+            echo "matrix=${FULL_MATRIX}" >> $GITHUB_OUTPUT
+            echo "标签推送：构建所有平台"
           fi
 
   build:
@@ -103,15 +100,15 @@ jobs:
         if: matrix.os == 'ubuntu-24.04-arm' && matrix.rid == 'linux-arm64'
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
 
-      # macOS 依赖（如果需要）
+      # macOS 依赖 - 使用 macfuse 替代已弃用的 osxfuse
       - name: Install macOS dependencies
         if: startsWith(matrix.os, 'macos-')
         run: |
-          if [ "${{ matrix.rid }}" = "osx-x64" ]; then
-            # Intel Mac 可能需要额外的配置
-            echo "Configuring for Intel Mac"
-          fi
-          brew install --cask osxfuse || true
+          echo "Configuring for ${{ matrix.rid }}"
+          # 使用 macfuse 替代 osxfuse（兼容 Apple Silicon 和 Intel）
+          brew install --cask macfuse || brew install macos-fuse-t/homebrew-cask/fuse-t
+          # 如果项目不需要 FUSE，可以注释掉上面的行，或使用 true 命令忽略错误
+          # true  # 占位符，如果不需要 FUSE 依赖
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -196,7 +193,7 @@ jobs:
             | 🪟 Windows | x64 | `Navigation-win-x64.zip` | 适用于绝大多数 Windows 电脑（Intel/AMD 64位） |
             | 🪟 Windows | ARM64 | `Navigation-win-arm64.zip` | 适用于 Windows on ARM 设备（如 Surface Pro X） |
             | 🐧 Linux | x64 | `Navigation-linux-x64.tar.gz` | 适用于绝大多数 Linux 电脑（Intel/AMD 64位） |
-            | 🐧 Linux | ARM64 | `Navigation-linux-arm64.tar.gz` | 适用于 ARM64 架构的 Linux 设备 |
+            | 🐧 Linux | ARM64 | `Navigation-linux-arm64.tar.gz` | 适用于 ARM64 架构的 Linux 设备（如树莓派 4/5） |
             | 🍎 macOS | Apple Silicon | `Navigation-osx-arm64.tar.gz` | 适用于 M1/M2/M3/M4 系列 Mac |
             | 🍎 macOS | Intel | `Navigation-osx-x64.tar.gz` | 适用于 Intel 芯片的 Mac |
 
