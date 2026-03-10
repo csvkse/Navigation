@@ -7,34 +7,30 @@ on:
   workflow_dispatch: # 允许在 GitHub Actions 面板手动点击运行
 
 jobs:
+  # 准备阶段：根据触发方式动态生成构建矩阵
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Set build matrix
+        id: set-matrix
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # 手动触发：仅构建 Linux x64
+            echo 'matrix={"include":[{"os":"ubuntu-latest","rid":"linux-x64","target_name":"Linux x64","archive_ext":"tar.gz"}]}' >> $GITHUB_OUTPUT
+          else
+            # Tag 推送：构建所有平台
+            echo 'matrix={"include":[{"os":"windows-latest","rid":"win-x64","target_name":"Windows x64","archive_ext":"zip"},{"os":"windows-latest","rid":"win-arm64","target_name":"Windows ARM64","archive_ext":"zip"},{"os":"ubuntu-latest","rid":"linux-x64","target_name":"Linux x64","archive_ext":"tar.gz"},{"os":"ubuntu-24.04-arm","rid":"linux-arm64","target_name":"Linux ARM64","archive_ext":"tar.gz"},{"os":"macos-latest","rid":"osx-arm64","target_name":"macOS Apple Silicon","archive_ext":"tar.gz"}]}' >> $GITHUB_OUTPUT
+          fi
+
   build:
     name: Build ${{ matrix.target_name }}
+    needs: prepare
     runs-on: ${{ matrix.os }}
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            rid: win-x64
-            target_name: Windows x64
-            archive_ext: zip
-          - os: windows-latest
-            rid: win-arm64
-            target_name: Windows ARM64
-            archive_ext: zip
-          - os: ubuntu-latest
-            rid: linux-x64
-            target_name: Linux x64
-            archive_ext: tar.gz
-          - os: ubuntu-24.04-arm
-            rid: linux-arm64
-            target_name: Linux ARM64
-            archive_ext: tar.gz
-          - os: macos-latest
-            rid: osx-arm64
-            target_name: macOS Apple Silicon
-            archive_ext: tar.gz
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
 
     steps:
       - name: Checkout repository

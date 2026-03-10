@@ -12,16 +12,29 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  # 准备阶段：根据触发方式动态生成构建矩阵
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Set build matrix
+        id: set-matrix
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # 手动触发：仅构建 linux/amd64
+            echo 'matrix={"include":[{"platform":"linux/amd64","os":"ubuntu-latest"}]}' >> $GITHUB_OUTPUT
+          else
+            # Tag 推送 / PR：构建所有平台
+            echo 'matrix={"include":[{"platform":"linux/amd64","os":"ubuntu-latest"},{"platform":"linux/arm64","os":"ubuntu-24.04-arm"}]}' >> $GITHUB_OUTPUT
+          fi
+
   # 阶段 1：使用矩阵在各自的原生机器上独立构建
   build:
+    needs: prepare
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - platform: linux/amd64
-            os: ubuntu-latest
-          - platform: linux/arm64
-            os: ubuntu-24.04-arm
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
 
     runs-on: ${{ matrix.os }}
     # 权限设置：构建阶段通常不需要 packages: write 权限，只需读取代码即可（推送操作由 token 控制）
