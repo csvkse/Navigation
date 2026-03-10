@@ -4,10 +4,7 @@ import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 import { VitePWA } from 'vite-plugin-pwa'
-
-import fs from 'node:fs'
-
-const packageJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, './package.json'), 'utf-8'))
+import pkg from './package.json'
 
 // 为 vite-ssg 扩展配置类型
 interface ViteSSGConfig extends UserConfig {
@@ -20,7 +17,7 @@ interface ViteSSGConfig extends UserConfig {
 
 export default defineConfig({
   define: {
-    __APP_VERSION__: JSON.stringify(packageJson.version),
+    __APP_VERSION__: JSON.stringify(pkg.version),
   },
   base: '/',
   preview: {
@@ -54,7 +51,6 @@ export default defineConfig({
         name: 'WebTool - 极简工具箱',
         short_name: 'WebTool',
         description: '一个功能丰富的网页版工具箱',
-        lang: 'zh-CN',
         theme_color: '#6366f1',
         background_color: '#ffffff',
         display: 'standalone',
@@ -78,8 +74,11 @@ export default defineConfig({
         ]
       },
       workbox: {
+        cleanupOutdatedCaches: true,
+        skipWaiting: true,
+        clientsClaim: true,
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 将上限调至 5MB
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        globPatterns: ['**/*.{js,css,html,png,svg,woff,woff2,ttf,eot,json,webmanifest}'],
         // 针对 vite-ssg 的路由处理
         navigateFallback: '/index.html'
       }

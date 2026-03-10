@@ -27,10 +27,10 @@
                         </div>
 
                         <!-- Back Button -->
-                        <!-- <Button variant="ghost" size="icon" @click="handleBack"
+                        <Button variant="ghost" size="icon" @click="handleBack"
                             class="h-8 w-8 mb-6 sm:mb-8 rounded-xl bg-muted/10 border border-border/10 group">
                             <ChevronLeft class="h-4 w-4 text-muted-foreground/60 group-hover:text-primary" />
-                        </Button> -->
+                        </Button>
 
                         <!-- Auxiliary Info (Restored for Desktop) -->
                         <div
@@ -377,6 +377,7 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted, nextTick, onUnmounted, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from '@/composables/useI18n'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -390,7 +391,8 @@ import {
 } from '@/components/ui/select'
 import {
     Sun, Moon, Settings, Plus, User, LogIn, LogOut, UserPlus,
-    Layers, Key, Download, Trash2, Book, Shield, Copy, LayoutGrid, List
+    Layers, Key, Download, Trash2, Book, Shield, Copy, LayoutGrid, List,
+    ChevronLeft
 } from 'lucide-vue-next'
 
 import type { WebNavTheme } from '@/config/webNav/webNavTheme'
@@ -415,6 +417,17 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+
+const router = useRouter()
+const route = useRoute()
+
+const handleBack = () => {
+    if (route.query.from === 'home') {
+        router.push('/')
+    } else {
+        router.push('/tools')
+    }
+}
 
 const handleCopyReadOnly = () => {
     emit('copy-read-only')
