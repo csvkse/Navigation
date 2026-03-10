@@ -14,13 +14,14 @@ public class FastDbService : IDisposable
 
     public FastDbService(string dbPath = "fastdb.db")
     {
-        // 确保数据库文件所在目录存在
         var dir = Path.GetDirectoryName(dbPath);
         if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
         {
             Directory.CreateDirectory(dir);
         }
         Console.WriteLine($"FastDB 数据库文件路径: {dbPath}");
+
+        // 建议在连接字符串中加入 Pooling=False (如果不使用并发池) 或者保持默认
         _connection = new SqliteConnection($"Data Source={dbPath}");
         _connection.Open();
         InitializeDatabase();
@@ -29,7 +30,12 @@ public class FastDbService : IDisposable
     private void InitializeDatabase()
     {
         using var cmd = _connection.CreateCommand();
+        // 优化 1: 启用 WAL (Write-Ahead Logging) 提升并发和写入性能
         cmd.CommandText = """
+            PRAGMA journal_mode = WAL;
+            PRAGMA synchronous = NORMAL;
+            PRAGMA temp_store = MEMORY;
+
             CREATE TABLE IF NOT EXISTS FastData (
                 Id TEXT PRIMARY KEY,
                 Content TEXT NOT NULL DEFAULT '{}',
@@ -52,10 +58,11 @@ public class FastDbService : IDisposable
         cmd.Parameters.AddWithValue("@hashKey", hashKey);
 
         using var reader = cmd.ExecuteReader();
-        var sb = new StringBuilder();
+        // 优化 2: 预估初始容量，减少扩容开销
+        var sb = new StringBuilder(1024);
         sb.Append('[');
         bool first = true;
-        
+
         while (reader.Read())
         {
             if (!first) sb.Append(',');
@@ -67,9 +74,10 @@ public class FastDbService : IDisposable
             var createTime = reader.GetString(3);
             var updateTime = reader.IsDBNull(4) ? "null" : $"\"{reader.GetString(4)}\"";
 
-            // If content is already a valid JSON object string (starts with '{'), we embed it directly
-            // Otherwise, we wrap it in a JSON string (for fallback safety)
-            var contentJson = content.TrimStart().StartsWith('{') ? content : JsonSerializer.Serialize(content, AppJsonSerializerContext.Default.String);
+            // 优化 3: 使用 Span 避免 TrimStart 产生新的字符串分配，并兼容 JSON 数组 '['
+            var contentSpan = content.AsSpan().TrimStart();
+            bool isJson = contentSpan.Length > 0 && (contentSpan[0] == '{' || contentSpan[0] == '[');
+            var contentJson = isJson ? content : JsonSerializer.Serialize(content, AppJsonSerializerContext.Default.String);
 
             sb.Append($"{{\"id\":\"{id}\",\"content\":{contentJson},\"hashKey\":\"{hKey}\",\"createTime\":\"{createTime}\",\"updateTime\":{updateTime}}}");
         }
@@ -77,46 +85,31 @@ public class FastDbService : IDisposable
         return sb.ToString();
     }
 
-    /// <summary>
-    /// 按 HashKey 获取所有数据，按 CreateTime 降序
-    /// </summary>
     public List<FastData> GetByHashKey(string hashKey)
     {
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = "SELECT Id, Content, HashKey, CreateTime, UpdateTime FROM FastData WHERE HashKey = @hashKey ORDER BY CreateTime DESC";
         cmd.Parameters.AddWithValue("@hashKey", hashKey);
-
         return ReadAll(cmd);
     }
 
-    /// <summary>
-    /// 仅按 Id 获取单条数据（用于 ReadOnly 端点）
-    /// </summary>
     public FastData? GetByIdOnly(string id)
     {
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = "SELECT Id, Content, HashKey, CreateTime, UpdateTime FROM FastData WHERE Id = @id";
         cmd.Parameters.AddWithValue("@id", id);
-
         return ReadOne(cmd);
     }
 
-    /// <summary>
-    /// 按 Id + HashKey 获取单条数据
-    /// </summary>
     public FastData? GetById(string id, string hashKey)
     {
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = "SELECT Id, Content, HashKey, CreateTime, UpdateTime FROM FastData WHERE Id = @id AND HashKey = @hashKey";
         cmd.Parameters.AddWithValue("@id", id);
         cmd.Parameters.AddWithValue("@hashKey", hashKey);
-
         return ReadOne(cmd);
     }
 
-    /// <summary>
-    /// 插入数据
-    /// </summary>
     public void Insert(FastData entity)
     {
         using var cmd = _connection.CreateCommand();
@@ -129,16 +122,13 @@ public class FastDbService : IDisposable
         cmd.ExecuteNonQuery();
     }
 
-    /// <summary>
-    /// 批量插入数据
-    /// </summary>
     public void InsertBulk(IEnumerable<FastData> entities)
     {
         using var transaction = _connection.BeginTransaction();
         using var cmd = _connection.CreateCommand();
         cmd.Transaction = transaction;
         cmd.CommandText = "INSERT INTO FastData (Id, Content, HashKey, CreateTime, UpdateTime) VALUES (@id, @content, @hashKey, @createTime, @updateTime)";
-        
+
         var pId = cmd.Parameters.Add("@id", SqliteType.Text);
         var pContent = cmd.Parameters.Add("@content", SqliteType.Text);
         var pHashKey = cmd.Parameters.Add("@hashKey", SqliteType.Text);
@@ -157,9 +147,6 @@ public class FastDbService : IDisposable
         transaction.Commit();
     }
 
-    /// <summary>
-    /// 更新 Content 和 UpdateTime
-    /// </summary>
     public bool Update(string id, string hashKey, string content, string updateTime)
     {
         using var cmd = _connection.CreateCommand();
@@ -172,9 +159,6 @@ public class FastDbService : IDisposable
         return cmd.ExecuteNonQuery() > 0;
     }
 
-    /// <summary>
-    /// 批量更新 Content 和 UpdateTime
-    /// </summary>
     public int UpdateBulk(string hashKey, IEnumerable<(string Id, string Content)> items)
     {
         using var transaction = _connection.BeginTransaction();
@@ -203,9 +187,6 @@ public class FastDbService : IDisposable
         return count;
     }
 
-    /// <summary>
-    /// 删除数据
-    /// </summary>
     public bool Delete(string id, string hashKey)
     {
         using var cmd = _connection.CreateCommand();
@@ -216,9 +197,6 @@ public class FastDbService : IDisposable
         return cmd.ExecuteNonQuery() > 0;
     }
 
-    /// <summary>
-    /// 批量删除数据
-    /// </summary>
     public int DeleteBulk(string hashKey, IEnumerable<string> ids)
     {
         using var transaction = _connection.BeginTransaction();
@@ -241,28 +219,28 @@ public class FastDbService : IDisposable
         return count;
     }
 
-    /// <summary>
-    /// 删除某个 HashKey 下的所有数据
-    /// </summary>
     public int Clear(string hashKey)
     {
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = "DELETE FROM FastData WHERE HashKey = @hashKey";
         cmd.Parameters.AddWithValue("@hashKey", hashKey);
-
         return cmd.ExecuteNonQuery();
     }
 
-    /// <summary>
-    /// JSON 搜索：查出 HashKey 下所有数据后，在应用层做 JSON containment 匹配
-    /// </summary>
     public List<FastData> Search(string hashKey, JsonElement jsonQuery)
     {
         var all = GetByHashKey(hashKey);
-        var results = new List<FastData>();
+        var results = new List<FastData>(all.Count / 4); // 适度预估容量
 
         foreach (var item in all)
         {
+            // 优化 4: 提前拦截明显非 JSON 的格式，避免 try-catch 的高昂开销
+            var contentSpan = item.Content.AsSpan().TrimStart();
+            if (contentSpan.Length == 0 || (contentSpan[0] != '{' && contentSpan[0] != '['))
+            {
+                continue;
+            }
+
             try
             {
                 using var doc = JsonDocument.Parse(item.Content);
@@ -271,7 +249,7 @@ public class FastDbService : IDisposable
                     results.Add(item);
                 }
             }
-            catch
+            catch (JsonException)
             {
                 // Content 不是有效 JSON，跳过
             }
@@ -280,15 +258,10 @@ public class FastDbService : IDisposable
         return results;
     }
 
-    /// <summary>
-    /// 递归检查 source 是否包含 query 中的所有键值对
-    /// 模拟 PostgreSQL 的 @> (containment) 操作
-    /// </summary>
     private static bool JsonContains(JsonElement source, JsonElement query)
     {
         if (query.ValueKind != source.ValueKind)
         {
-            // 特殊处理：数字比较（int vs double）
             if (query.ValueKind == JsonValueKind.Number && source.ValueKind == JsonValueKind.Number)
             {
                 return query.GetDecimal() == source.GetDecimal();
@@ -301,15 +274,12 @@ public class FastDbService : IDisposable
             case JsonValueKind.Object:
                 foreach (var prop in query.EnumerateObject())
                 {
-                    if (!source.TryGetProperty(prop.Name, out var sourceValue))
-                        return false;
-                    if (!JsonContains(sourceValue, prop.Value))
+                    if (!source.TryGetProperty(prop.Name, out var sourceValue) || !JsonContains(sourceValue, prop.Value))
                         return false;
                 }
                 return true;
 
             case JsonValueKind.Array:
-                // 查询数组中的每个元素必须在源数组中存在
                 foreach (var queryItem in query.EnumerateArray())
                 {
                     bool found = false;
@@ -381,12 +351,34 @@ public class FastDbService : IDisposable
     /// </summary>
     public static string ComputeMd5(string input)
     {
-        var bytes = MD5.HashData(Encoding.UTF8.GetBytes(input));
-        return Convert.ToHexStringLower(bytes);
+        // 优化 5: 零分配 MD5 哈希计算 (.NET 7/8/9)
+        int maxByteCount = Encoding.UTF8.GetMaxByteCount(input.Length);
+
+        // 阈值设为 1024 字节，超出则使用 ArrayPool (或者直接 new)，避免爆栈
+        if (maxByteCount <= 1024)
+        {
+            Span<byte> utf8Bytes = stackalloc byte[maxByteCount];
+            int bytesWritten = Encoding.UTF8.GetBytes(input, utf8Bytes);
+
+            Span<byte> hashBytes = stackalloc byte[16]; // MD5 固定 16 字节
+            MD5.HashData(utf8Bytes[..bytesWritten], hashBytes);
+            return Convert.ToHexStringLower(hashBytes);
+        }
+        else
+        {
+            // 对于超长字符串，退化为分配数组
+            var bytes = MD5.HashData(Encoding.UTF8.GetBytes(input));
+            return Convert.ToHexStringLower(bytes);
+        }
     }
 
     public void Dispose()
     {
-        _connection?.Dispose();
+        // 确保主动清理状态
+        if (_connection.State == System.Data.ConnectionState.Open)
+        {
+            _connection.Close();
+        }
+        _connection.Dispose();
     }
 }
