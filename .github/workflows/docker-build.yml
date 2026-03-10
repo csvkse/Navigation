@@ -196,16 +196,19 @@ jobs:
           # 创建并推送 manifest
           docker buildx imagetools create \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
+            $(printf '%s@sha256:%s ' "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" *)
 
           echo "Manifest 创建完成，标签："
           jq -r '.tags[]' <<< "$DOCKER_METADATA_OUTPUT_JSON"
 
-      # 验证推送的 manifest
+      # 验证推送的 manifest - 修正版本
       - name: Verify manifest
         run: |
           echo "验证多架构 manifest："
+          # 预先定义基础镜像名
+          BASE_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
           for tag in $(jq -r '.tags[]' <<< "$DOCKER_METADATA_OUTPUT_JSON"); do
-            echo "检查 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${tag}"
-            docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${tag}
+            FULL_IMAGE_NAME="${BASE_IMAGE}:${tag}"
+            echo "检查 ${FULL_IMAGE_NAME}"
+            docker buildx imagetools inspect "${FULL_IMAGE_NAME}"
           done
