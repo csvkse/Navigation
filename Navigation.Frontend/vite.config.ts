@@ -5,6 +5,10 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 import { VitePWA } from 'vite-plugin-pwa'
 
+import fs from 'node:fs'
+
+const packageJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, './package.json'), 'utf-8'))
+
 // 为 vite-ssg 扩展配置类型
 interface ViteSSGConfig extends UserConfig {
   ssgOptions?: {
@@ -15,6 +19,9 @@ interface ViteSSGConfig extends UserConfig {
 }
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(packageJson.version),
+  },
   base: '/',
   preview: {
     allowedHosts: true,

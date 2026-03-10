@@ -99,6 +99,16 @@
                 <ArrowUp class="h-6 w-6 transition-transform group-hover:-translate-y-0.5" />
             </button>
         </Transition>
+
+        <!-- Footer with Version & GitHub -->
+        <div class="text-center text-sm text-muted-foreground/40 py-8 space-y-2 mt-8">
+            <div>v{{ version }}</div>
+            <a href="https://github.com/csvkse/Navigation" target="_blank"
+                class="hover:text-primary/80 transition-colors inline-flex items-center space-x-1">
+                <Github class="w-4 h-4" />
+                <span>GitHub</span>
+            </a>
+        </div>
     </div>
 </template>
 
@@ -126,6 +136,8 @@ import WebNavLinkModal from './WebNav/WebNavLinkModal.vue'
 import AuthModal from '@/components/AuthModal.vue'
 import WebNavBulkModal from './WebNav/WebNavBulkModal.vue'
 import { useAuth } from '@/composables/useAuth'
+
+const version = __APP_VERSION__
 
 const ICONS: Record<string, any> = {
     Gamepad, Layout, Globe, Activity, Terminal, Cloud, Database, Cpu, MessageSquare, Monitor, Bookmark, Link, Layers,

@@ -10,6 +10,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   # 准备阶段：根据触发方式动态生成构建矩阵
