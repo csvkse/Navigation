@@ -119,7 +119,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, shallowRef } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, shallowRef, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from '@/composables/useI18n'
 import { useTheme } from '@/composables/useTheme'
@@ -127,20 +127,20 @@ import { Button } from '@/components/ui/button'
 import { Compass, Bookmark, Layers, Globe, Activity, Box, ArrowUp } from 'lucide-vue-next'
 import { Gamepad, Layout, Terminal, Cloud, Database, Cpu, MessageSquare, Monitor, Link, Github, Twitter, Mail, ExternalLink, Shield, Server, Zap } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
-import CryptoJS from 'crypto-js'
+// CryptoJS is dynamically imported when needed to reduce initial bundle size
 
 // Import子组件
 import WebNavHeader from './WebNav/WebNavHeader.vue'
 import WebNavAppGrid from './WebNav/WebNavAppGrid.vue'
 import WebNavBookmarks from './WebNav/WebNavBookmarks.vue'
-import WebNavManageView from './WebNav/WebNavManageView.vue'
-import WebNavBackground from './WebNav/WebNavBackground.vue'
-import WebNavSuspended from './WebNav/WebNavSuspended.vue'
+const WebNavManageView = defineAsyncComponent(() => import('./WebNav/WebNavManageView.vue'))
+const WebNavBackground = defineAsyncComponent(() => import('./WebNav/WebNavBackground.vue'))
+const WebNavSuspended = defineAsyncComponent(() => import('./WebNav/WebNavSuspended.vue'))
 import { WEBNAV_THEMES, DEFAULT_THEME_ID, DEFAULT_THEME_ID_Night } from '@/config/webNav/webNavTheme'
 import { useAppStore } from '@/stores/appStore'
-import WebNavLinkModal from './WebNav/WebNavLinkModal.vue'
-import AuthModal from '@/components/AuthModal.vue'
-import WebNavBulkModal from './WebNav/WebNavBulkModal.vue'
+const WebNavLinkModal = defineAsyncComponent(() => import('./WebNav/WebNavLinkModal.vue'))
+const AuthModal = defineAsyncComponent(() => import('@/components/AuthModal.vue'))
+const WebNavBulkModal = defineAsyncComponent(() => import('./WebNav/WebNavBulkModal.vue'))
 import { useAuth } from '@/composables/useAuth'
 
 const version = __APP_VERSION__
@@ -177,7 +177,8 @@ interface LinkRecord {
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 const STATIC_SALT = 'webnav_an_v1_920930589'
 
-const generateSecureKey = (username: string) => {
+const generateSecureKey = async (username: string) => {
+    const CryptoJS = (await import('crypto-js')).default
     const random = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2)
     const timestamp = Date.now().toString()
     return CryptoJS.SHA256(`${username}:${STATIC_SALT}:${random}:${timestamp}`).toString()
@@ -292,7 +293,7 @@ const initFromCache = () => {
     if ((!keyToUse || keyToUse === defaultKey) && !currentUser.value) {
         const pathParts = window.location.pathname.split('/')
         if (pathParts.includes('web-nav') && pathParts.length > 3) {
-            keyToUse = decodeURIComponent(pathParts[pathParts.length - 1] || '')
+            try { keyToUse = decodeURIComponent(pathParts[pathParts.length - 1] || '') } catch (e) { }
         }
     }
 
@@ -311,12 +312,32 @@ const initFromCache = () => {
 }
 
 const links = shallowRef<LinkRecord[]>(initFromCache())
-const loading = ref(currentKey.value === defaultKey ? false : links.value.length === 0)
-const isInitialLoading = ref(currentKey.value === defaultKey ? false : links.value.length === 0)
+// 核心修复：SSR/SSG 时 loading 始终为 false，防止骨架屏被写入预渲染 HTML
+// 客户端：有缓存则 false（直显数据），无缓存则 true（仅客户端显示骨架屏）
+const loading = ref(
+    import.meta.env.SSR ? false :
+        (currentKey.value === defaultKey ? false : links.value.length === 0)
+)
+const isInitialLoading = ref(
+    import.meta.env.SSR ? false :
+        (currentKey.value === defaultKey ? false : links.value.length === 0)
+)
 const appStore = useAppStore()
 
-if (currentKey.value && links.value.length === 0 && currentKey.value !== defaultKey) {
-    // appStore.globalLoading = true // Disable global full-screen mask, use skeleton instead
+// 关键时序：缓存加载成功后，在下一帧（Vue 渲染完成后）立即移除 SSG 隔离
+// 这是 data-app-session 被移除的最早时机，不等网络请求
+if (!import.meta.env.SSR && links.value.length > 0) {
+    Promise.resolve().then(() => {
+        document.documentElement.removeAttribute('data-app-session')
+    })
+}
+
+// 无缓存时，立即在 setup 阶段开始获取数据（不等 onMounted）
+let _setupFetchStarted = false
+if (!import.meta.env.SSR && currentKey.value && links.value.length === 0 && currentKey.value !== defaultKey) {
+    _setupFetchStarted = true
+    // 延迟到 nextTick，确保响应式系统就绪
+    Promise.resolve().then(() => fetchData())
 }
 
 const saving = ref(false)
@@ -771,9 +792,21 @@ const fetchData = async (silent = false) => {
             ? `${BASE_URL}/FastDB/ReadOnly?ReadOnlyId=${keyStr}`
             : `${BASE_URL}/FastDB?key=${encodeURIComponent(keyStr)}`
 
-        const res = await fetch(url)
-        if (!res.ok) throw new Error('Network error')
-        const data = await res.json()
+        // 优先使用 index.html 预取的数据，避免重复请求
+        let data: any = null
+        const prefetch = (window as any).__PREFETCH__
+        if (prefetch && prefetch.key === currentKeySnap && prefetch.promise) {
+            try {
+                data = await prefetch.promise
+                    ; (window as any).__PREFETCH__ = null // 消费后清除
+            } catch (e) { data = null }
+        }
+
+        if (!data) {
+            const res = await fetch(url)
+            if (!res.ok) throw new Error('Network error')
+            data = await res.json()
+        }
 
         const rawItems = (data || []).map((item: any) => ({
             ...item,
@@ -813,7 +846,7 @@ const fetchData = async (silent = false) => {
                 if (newItem.updateTime && oldItem.updateTime === newItem.updateTime) {
                     return oldItem
                 }
-                
+
                 // fallback comparison for items without updateTime
                 const oldContentStr = JSON.stringify(oldItem.content)
                 const newContentStr = JSON.stringify(newItem.content)
@@ -841,6 +874,11 @@ const fetchData = async (silent = false) => {
         loading.value = false
         isInitialLoading.value = false
         appStore.globalLoading = false
+        // 主动清除所有拦截标志，确保内容立即可见
+        if (typeof document !== 'undefined') {
+            document.documentElement.removeAttribute('data-app-loading')
+            document.documentElement.removeAttribute('data-app-session')
+        }
     }
 }
 
@@ -1460,7 +1498,7 @@ const generateGuid = () => {
 
 const handleCreateUserKey = async (name: string) => {
     if (!currentUser.value) return
-    const newKey = generateSecureKey(currentUser.value.username + name)
+    const newKey = await generateSecureKey(currentUser.value.username + name)
     const readOnlyKey = generateGuid()
     const newEntry = { name, key: newKey, readOnlyKey }
 
@@ -1688,7 +1726,7 @@ const filteredLinks = computed(() => {
 const groupedBookmarks = computed(() => {
     const groups: Record<string, any[]> = {}
     const defaultCat = t('tools.webNav.defaultCategory')
-    
+
     // Grouping
     bookmarkGroups.value.forEach(link => {
         const cat = link.content.category || defaultCat
@@ -1754,10 +1792,13 @@ const ensureUniqueKeys = async () => {
 onMounted(() => {
     ensureUniqueKeys()
 
-    if (links.value.length > 0) {
-        setTimeout(() => fetchData(true), 200)
-    } else {
-        fetchData()
+    // setup 已经启动了 fetch，不重复调用
+    if (!_setupFetchStarted) {
+        if (links.value.length > 0) {
+            setTimeout(() => fetchData(true), 200)
+        } else {
+            fetchData()
+        }
     }
 
     updateTime()
@@ -1779,7 +1820,24 @@ onUnmounted(() => {
     window.removeEventListener('beforeunload', flushThemeConfig)
 })
 
-watch(currentKey, () => {
+// currentKey 变化时：优先读取新 key 的缓存，有则直显，无则静默加载
+watch(currentKey, (newKey) => {
+    if (!newKey || newKey === defaultKey) {
+        fetchData()
+        return
+    }
+    // 尝试从缓存加载新 key 的数据
+    const cacheKey = getCacheKey(newKey)
+    const cached = localStorage.getItem(cacheKey)
+    if (cached) {
+        try {
+            links.value = JSON.parse(cached)
+            loading.value = false
+            // 后台静默刷新
+            setTimeout(() => fetchData(true), 200)
+            return
+        } catch (e) { /* 缓存损坏，走网络 */ }
+    }
     fetchData()
 })
 

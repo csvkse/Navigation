@@ -38,6 +38,8 @@ export default defineConfig({
           if (id.includes('node_modules/pinia')) return 'vendor-vue'
           if (id.includes('node_modules/reka-ui')) return 'vendor-ui'
           if (id.includes('node_modules/@vueuse/core')) return 'vendor-ui'
+          if (id.includes('node_modules/crypto-js')) return 'vendor-crypto'
+          if (id.includes('node_modules/lucide-vue-next')) return 'vendor-icons'
         }
       }
     },

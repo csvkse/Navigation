@@ -2,8 +2,86 @@
   <Toaster position="top-center" :theme="isDark ? 'dark' : 'light'" richColors closeButton />
 
   <div class="flex h-screen bg-background overflow-hidden">
+    <!-- 侧边栏遮罩(仅移动端) -->
+    <div v-if="!gameStore.sidebarCollapsed" class="fixed inset-0 bg-black/50 z-30 lg:hidden" @click="toggleSidebar" />
+
+    <!-- 侧边导航栏 -->
+    <aside v-if="!shouldHideSidebar" :class="[
+      'border-r bg-card flex flex-col transition-all duration-300 ease-in-out shadow-lg z-40',
+      'fixed lg:relative h-full',
+      gameStore.sidebarCollapsed ? '-translate-x-full lg:translate-x-0 lg:w-16' : 'translate-x-0 w-64'
+    ]">
+      <div class="p-4 border-b flex items-center justify-center">
+        <h1 v-if="!gameStore.sidebarCollapsed" class="text-xl font-bold flex items-center gap-2">
+          <span class="text-2xl"><img src="/logo.svg" class="w-10" /></span>
+          {{ pkg.title }}
+        </h1>
+        <span v-else class="text-2xl"><img src="/logo.svg" class="w-10" /></span>
+      </div>
+
+      <nav class="flex-1 p-2 space-y-1 overflow-y-auto">
+        <RouterLink v-for="item in navItems" :key="item.path" :to="item.path">
+          <Button :variant="isNavItemActive(item.path) ? 'secondary' : 'ghost'"
+            :class="['w-full transition-all', gameStore.sidebarCollapsed ? 'justify-center px-0' : 'justify-start']"
+            :title="gameStore.sidebarCollapsed ? item.name.value : undefined">
+            <component :is="item.icon" :class="['h-4 w-4', !gameStore.sidebarCollapsed && 'mr-3']" />
+            <span v-if="!gameStore.sidebarCollapsed">{{ item.name.value }}</span>
+          </Button>
+        </RouterLink>
+      </nav>
+
+      <div class="p-2 border-t text-muted-foreground/30 text-[10px] text-center font-mono">
+        v{{ pkg.version }}
+      </div>
+
+      <div class="p-2 border-t">
+        <Popover>
+          <PopoverTrigger as-child>
+            <Button variant="ghost" class="w-full" size="sm">
+              <Languages class="h-4 w-4" />
+              <span v-if="!gameStore.sidebarCollapsed" class="ml-2">{{ localeNames[gameStore.locale] }}</span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent class="w-48 p-2" :align="gameStore.sidebarCollapsed ? 'start' : 'center'">
+            <div class="space-y-1">
+              <Button v-for="locale in locales" :key="locale" @click="gameStore.locale = locale"
+                :variant="gameStore.locale === locale ? 'secondary' : 'ghost'" class="w-full justify-start" size="sm">
+                {{ localeNames[locale] }}
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      <div class="p-2 border-t">
+        <Button @click="isDark = !isDark" variant="ghost" class="w-full" size="sm">
+          <Sun v-if="isDark" class="h-4 w-4" />
+          <Moon v-else class="h-4 w-4" />
+          <span v-if="!gameStore.sidebarCollapsed" class="ml-2">{{ isDark ? t('sidebar.lightMode') :
+            t('sidebar.darkMode') }}</span>
+        </Button>
+      </div>
+
+      <div class="p-2 border-t">
+        <Button @click="toggleSidebar" variant="ghost" class="w-full" size="sm">
+          <ChevronLeft v-if="!gameStore.sidebarCollapsed" class="h-4 w-4" />
+          <ChevronRight v-else class="h-4 w-4" />
+          <span v-if="!gameStore.sidebarCollapsed" class="ml-2">{{ t('sidebar.collapse') }}</span>
+        </Button>
+      </div>
+    </aside>
+
     <!-- 主内容区 -->
     <div class="flex-1 flex flex-col overflow-hidden relative">
+      <header v-if="showGlobalMobileHeader && !shouldHideSidebar"
+        class="lg:hidden h-14 border-b bg-card/80 backdrop-blur-md flex items-center px-4 shrink-0 z-20">
+        <Button variant="ghost" size="icon" class="h-9 w-9 text-muted-foreground mr-2"
+          @click="gameStore.sidebarCollapsed = false">
+          <Menu class="h-5 w-5" />
+        </Button>
+        <span class="font-bold text-sm tracking-tight uppercase truncate">{{ currentRouteTitle }}</span>
+      </header>
+
       <main class="flex-1 overflow-y-auto relative bg-background/50">
         <div id="main-content" class="h-full">
           <RouterView />
@@ -15,15 +93,24 @@
 
 <script setup lang="ts">
 import { onMounted, computed, watch, ref } from 'vue'
-import { RouterView, useRoute, useRouter } from 'vue-router'
+import { RouterView, RouterLink, useRoute, useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/appStore'
 import { useTheme } from '@/composables/useTheme'
-import { detectBrowserLocale } from '@/locales'
+import { useI18n } from '@/composables/useI18n'
+import { localeNames, detectBrowserLocale, type Locale } from '@/locales'
+import { Button } from '@/components/ui/button'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 
+import {
+  Home, FileText, Link, Globe, ListTree, StickyNote,
+  ChevronLeft, ChevronRight, Menu, Moon, Sun, Languages, Dices
+} from 'lucide-vue-next'
 import Toaster from '@/components/ui/sonner/Sonner.vue'
+import pkg from '../package.json'
 
 const gameStore = useAppStore()
 const { isDark } = useTheme()
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
@@ -34,11 +121,12 @@ const isLoading = computed(() => {
   if (route.query.loading === 'true') return true
   if (gameStore.globalLoading) return true
 
-  // 核心拦截：仅针对携带特定 Key 的深层链接执行全局遮罩
+  // 核心拦截：仅针对携带特定 Key 的深层链接（而非基础工具路径）执行全局遮罩
   if (!isRouterSettled.value) {
     const p = route.path
     const isDeepWebNav = p.startsWith('/tools/web-nav/') && p.length > 15
-    if (isDeepWebNav) return true
+    const isDeepTempNote = p.startsWith('/temp-note/') && p.length > 11
+    if (isDeepWebNav || isDeepTempNote) return true
   }
   return false
 })
@@ -49,7 +137,6 @@ watch(isLoading, (loading) => {
     document.documentElement.setAttribute('data-app-loading', 'true')
   } else {
     document.documentElement.removeAttribute('data-app-loading')
-    // 当全局 Loading 结束时，顺便清理 Session 隔离标志，确保内容可见
     document.documentElement.removeAttribute('data-app-session')
   }
 }, { immediate: true })
@@ -71,6 +158,30 @@ watch(() => route.query.loading, (val) => {
   }
 })
 
+const showGlobalMobileHeader = computed(() => {
+  if (!route.name) return false
+  return !['temp-note', 'secure-chat', 'web-nav', 'message-board'].includes(route.name as string)
+})
+
+const currentRouteTitle = computed(() => {
+  const item = navItems.find(i => isNavItemActive(i.path))
+  return item ? item.name.value : t('nav.overview')
+})
+
+const shouldHideSidebar = computed(() => {
+  if (route.name === 'web-nav' || route.path?.startsWith('/tools/web-nav')) return true
+  if (route.name === 'message-board' || route.path?.startsWith('/tools/message-board')) return true
+  return false
+})
+
+const isNavItemActive = (path: string) => {
+  if (path === '/') return route.path === '/'
+  if (path === '/temp-note' && route.path.startsWith('/temp-note')) return true
+  return route.path.startsWith(path)
+}
+
+const locales: Locale[] = ['zh-CN', 'en']
+
 onMounted(async () => {
   await router.isReady()
   isRouterSettled.value = true
@@ -78,7 +189,31 @@ onMounted(async () => {
   if (!localStorage.getItem('webtool')) {
     gameStore.locale = detectBrowserLocale()
   }
+
+  // 兜底安全网：5秒后强制清除所有拦截标志，防止极端情况下内容永远不可见
+  setTimeout(() => {
+    if (document.documentElement.hasAttribute('data-app-loading')) {
+      console.warn('[App] Force clearing data-app-loading after timeout')
+      document.documentElement.removeAttribute('data-app-loading')
+    }
+    if (document.documentElement.hasAttribute('data-app-session')) {
+      console.warn('[App] Force clearing data-app-session after timeout')
+      document.documentElement.removeAttribute('data-app-session')
+    }
+  }, 5000)
 })
+
+const navItems = [
+  { name: computed(() => t('nav.overview')), path: '/', icon: Home },
+  { name: computed(() => t('nav.tempText')), path: '/temp-text', icon: FileText },
+  { name: computed(() => t('nav.shortLink')), path: '/short-link', icon: Link },
+  { name: computed(() => t('nav.dnsSettings')), path: '/dns-settings', icon: Globe },
+  { name: computed(() => t('nav.tempMenu')), path: '/temp-menu', icon: ListTree },
+  { name: computed(() => t('nav.tempNote')), path: '/temp-note', icon: StickyNote },
+  { name: computed(() => t('nav.tools')), path: '/tools', icon: Dices }
+]
+
+const toggleSidebar = () => { gameStore.sidebarCollapsed = !gameStore.sidebarCollapsed }
 </script>
 
 <style>
