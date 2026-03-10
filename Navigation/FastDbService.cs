@@ -16,7 +16,7 @@ public class FastDbService : IDisposable
     {
         // 确保数据库文件所在目录存在
         var dir = Path.GetDirectoryName(dbPath);
-        if (!string.IsNullOrEmpty(dir))
+        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
         {
             Directory.CreateDirectory(dir);
         }

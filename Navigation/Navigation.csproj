@@ -9,6 +9,12 @@
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
   </PropertyGroup>
 
+  <!-- Release 模式下不生成调试文件 (.pdb) -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>None</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+
   <!-- Native AOT Cross-Compilation Linker Settings -->
   <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'linux-arm'">
     <CppLinker>arm-linux-gnueabihf-gcc</CppLinker>
