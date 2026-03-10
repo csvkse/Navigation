@@ -47,5 +47,7 @@ USER app
 FROM ${FINAL_BASE_IMAGE:-mcr.microsoft.com/dotnet/runtime-deps:10.0} AS final
 WORKDIR /app
 EXPOSE 8080
+RUN mkdir -p /app/data
+VOLUME /app/data
 COPY --from=publish /app/publish .
 ENTRYPOINT ["./Navigation"]

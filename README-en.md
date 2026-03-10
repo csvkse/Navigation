@@ -31,7 +31,7 @@ You can quickly run this project via Docker, which supports multi-architecture p
 docker pull ghcr.io/csvkse/navigation:main
 
 # Run the container (exposed on port 8080)
-docker run -d --name navigation -p 8080:8080 ghcr.io/csvkse/navigation:main
+docker run -d --name navigation -p 8080:8080 -v navigation-data:/app/data ghcr.io/csvkse/navigation:main
 ```
 
 ### Running the Executable
