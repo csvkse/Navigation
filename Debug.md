@@ -41,4 +41,16 @@ docker cp ./fastdb.db navigation:/app/data/fastdb.db
 # 11. 检查容器内目录结构
 docker exec navigation ls -la /app/
 docker exec navigation ls -la /app/data/
+
+# 12. 更新容器
+docker pull ghcr.io/csvkse/navigation:latest
+docker stop navigation
+docker rm navigation
+docker run -d \
+  --name navigation \
+  -p 8080:8080 \
+  -v navigation-data:/app/data \
+  ghcr.io/csvkse/navigation:latest
+docker logs navigation
+
 ```

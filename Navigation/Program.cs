@@ -171,7 +171,7 @@ fastdb.MapPut("/bulk", (string key, JsonElement dataList, FastDbService db) =>
                 if (prop.Name != "id")
                     dict[prop.Name] = prop.Value.Clone();
             }
-            items.Add((itemId, JsonSerializer.Serialize(dict)));
+            items.Add((itemId, JsonSerializer.Serialize(dict, AppJsonSerializerContext.Default.DictionaryStringJsonElement)));
         }
     }
 
@@ -243,19 +243,4 @@ static FastDataResult ToResult(FastData item)
         CreateTime = item.CreateTime,
         UpdateTime = item.UpdateTime
     };
-}
-
-// ===== AOT JSON 序列化上下文 =====
-
-[JsonSerializable(typeof(string))]
-[JsonSerializable(typeof(bool))]
-[JsonSerializable(typeof(int))]
-[JsonSerializable(typeof(FastData))]
-[JsonSerializable(typeof(FastData[]))]
-[JsonSerializable(typeof(FastDataResult))]
-[JsonSerializable(typeof(FastDataResult[]))]
-[JsonSerializable(typeof(JsonElement))]
-[JsonSerializable(typeof(Dictionary<string, JsonElement>))]
-internal partial class AppJsonSerializerContext : JsonSerializerContext
-{
 }

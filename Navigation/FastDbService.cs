@@ -69,7 +69,7 @@ public class FastDbService : IDisposable
 
             // If content is already a valid JSON object string (starts with '{'), we embed it directly
             // Otherwise, we wrap it in a JSON string (for fallback safety)
-            var contentJson = content.TrimStart().StartsWith('{') ? content : JsonSerializer.Serialize(content);
+            var contentJson = content.TrimStart().StartsWith('{') ? content : JsonSerializer.Serialize(content, AppJsonSerializerContext.Default.String);
 
             sb.Append($"{{\"id\":\"{id}\",\"content\":{contentJson},\"hashKey\":\"{hKey}\",\"createTime\":\"{createTime}\",\"updateTime\":{updateTime}}}");
         }
