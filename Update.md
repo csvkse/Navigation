@@ -7,9 +7,11 @@
 5. **自动折叠逻辑**：首页分类超过 10 个时将自动折叠后续分类，保持界面整洁。
 6. **操作体验优化**：修复并完善了分类禁用、删除在不同视图（列表/非列表）下的交互逻辑。
 
-7. **Tree View Support in Management Page**: The management page now supports a hierarchical tree structure with expand/collapse functionality, making it easier to manage large sets of bookmarks.
-8. **Category Drag-and-Drop Sorting**: You can now reorder categories directly via drag-and-drop in the management page.
-9. **Batch Update Optimization**: Introduced a backend batch update API, significantly improving performance when moving multiple bookmarks.
-10. **Custom Color Markers**: Support for setting specific colors for individual bookmarks or entire categories for clearer visual distinction.
-11. **Automatic Collapse Logic**: Categories on the homepage will automatically collapse if there are more than 10, keeping the interface clean and organized.
-12. **Enhanced Interaction**: Fixed and refined category actions (disable, delete) to ensure consistency across different views (list and grid modes).
+---
+
+1. **Tree View Support in Management Page**: The management page now supports a hierarchical tree structure with expand/collapse functionality, making it easier to manage large sets of bookmarks.
+2. **Category Drag-and-Drop Sorting**: You can now reorder categories directly via drag-and-drop in the management page.
+3. **Batch Update Optimization**: Introduced a backend batch update API, significantly improving performance when moving multiple bookmarks.
+4. **Custom Color Markers**: Support for setting specific colors for individual bookmarks or entire categories for clearer visual distinction.
+5. **Automatic Collapse Logic**: Categories on the homepage will automatically collapse if there are more than 10, keeping the interface clean and organized.
+6. **Enhanced Interaction**: Fixed and refined category actions (disable, delete) to ensure consistency across different views (list and grid modes).
