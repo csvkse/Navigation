@@ -16,105 +16,40 @@
                     </Button>
                 </div>
             </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
+            <div class="overflow-x-auto min-h-[300px]">
+                <table class="w-full text-left border-collapse min-w-[800px]">
                     <thead>
                         <tr class="text-[11px] uppercase tracking-wider text-muted-foreground/70 bg-muted/10">
                             <th class="p-4 font-bold border-b border-border/20 w-10"></th>
                             <th class="p-4 font-bold border-b border-border/20 uppercase tracking-widest">{{
                                 t('tools.webNav.name') }} / URL</th>
-                            <th class="p-4 font-bold border-b border-border/20">{{ t('tools.webNav.category') }}
-                            </th>
+                            <th class="p-4 font-bold border-b border-border/20">{{ t('tools.webNav.category') }}</th>
                             <th class="p-4 font-bold border-b border-border/20">{{ t('tools.webNav.style') }}</th>
-                            <th class="p-4 font-bold border-b border-border/20 text-center">{{
-                                t('tools.webNav.isApp')
+                            <th class="p-4 font-bold border-b border-border/20 text-center">{{ t('tools.webNav.isApp')
                             }}</th>
                             <th class="p-4 font-bold border-b border-border/20 text-center">{{
-                                t('tools.webNav.isApplied')
-                            }}</th>
+                                t('tools.webNav.isApplied') }}</th>
                             <th class="p-4 font-bold border-b border-border/20 text-right">{{ t('tools.webNav.actions')
-                                }}</th>
+                            }}</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-border/20">
-                        <tr v-for="link in filteredLinks" :key="link.id" draggable="true"
-                            @dragstart="$emit('drag-start', $event, link)" @dragend="$emit('drag-end')"
-                            @dragover.prevent @drop.stop="$emit('drop', $event, link)"
-                            class="hover:bg-muted/10 transition-colors group/row"
-                            :class="draggingId === link.id ? 'opacity-30 bg-primary/5' : ''">
-                            <td class="p-4">
-                                <GripVertical
-                                    class="h-4 w-4 text-muted-foreground/20 group-hover/row:text-primary transition-colors cursor-grab" />
-                            </td>
-                            <td class="p-4">
-                                <div class="flex items-center gap-3">
-                                    <div class="h-8 w-8 rounded-lg bg-muted/40 flex items-center justify-center shrink-0"
-                                        :style="{ color: link.content.color || 'inherit' }">
-                                        <component :is="getIcon(link.content.icon)" class="h-4 w-4"
-                                            v-if="link.content.icon" />
-                                        <span v-else class="text-sm opacity-40 font-bold">{{
-                                            link.content.name[0]?.toUpperCase() }}</span>
-                                    </div>
-                                    <div class="min-w-0">
-                                        <div class="font-bold text-base truncate">{{ link.content.name }}</div>
-                                        <div class="text-[11px] text-muted-foreground truncate">{{ link.content.url
-                                        }}</div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td class="p-4">
-                                <Badge variant="outline" class="rounded-lg text-[11px] bg-muted/20 border-border/50">
-                                    {{ link.content.category || t('tools.webNav.default') }}
-                                </Badge>
-                            </td>
-                            <td class="p-4">
-                                <div class="flex gap-1.5 items-center">
-                                    <div v-if="link.content.color" class="w-3 h-3 rounded-full shadow-sm"
-                                        :style="{ backgroundColor: link.content.color }" />
-                                    <span class="text-[11px] font-mono opacity-50">{{ link.content.color ||
-                                        t('tools.webNav.default')
-                                        }}</span>
-                                </div>
-                            </td>
-                            <td class="p-4 text-center">
-                                <div @click="$emit('toggle-is-app', link)" class="flex justify-center group/toggle">
-                                    <div :class="[
-                                        'w-10 h-5 rounded-full relative transition-all duration-300 cursor-pointer border border-border/50',
-                                        link.content.isApp ? 'bg-primary' : 'bg-muted-foreground/20'
-                                    ]">
-                                        <div :class="[
-                                            'absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white transition-all duration-300 shadow-sm',
-                                            link.content.isApp ? 'left-[22px]' : 'left-0.5'
-                                        ]"></div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td class="p-4 text-center">
-                                <div @click="$emit('toggle-apply', link)" class="flex justify-center group/toggle">
-                                    <div :class="[
-                                        'w-10 h-5 rounded-full relative transition-all duration-300 cursor-pointer border border-border/50',
-                                        link.content.isApplied !== false ? 'bg-primary' : 'bg-muted-foreground/20'
-                                    ]">
-                                        <div :class="[
-                                            'absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white transition-all duration-300 shadow-sm',
-                                            link.content.isApplied !== false ? 'left-[22px]' : 'left-0.5'
-                                        ]"></div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td class="p-4 text-right">
-                                <div class="flex justify-end gap-1">
-                                    <Button variant="ghost" size="icon"
-                                        class="h-7 w-7 rounded-lg hover:bg-primary/10 hover:text-primary"
-                                        @click="$emit('edit-link', link)">
-                                        <Edit2 class="h-3.5 w-3.5" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon"
-                                        class="h-7 w-7 rounded-lg hover:bg-destructive/10 hover:text-destructive"
-                                        @click="$emit('delete-link', link.id)">
-                                        <Trash2 class="h-3.5 w-3.5" />
-                                    </Button>
-                                </div>
+                        <template v-for="(node, rootKey) in treeNodes" :key="rootKey">
+                            <WebNavManageTreeNode :node="node" :depth="0" :dragging-id="draggingId"
+                                :category-order="categoryOrder"
+                                @drag-start="(e: DragEvent, l: Link) => $emit('drag-start', e, l)"
+                                @drag-end="$emit('drag-end')" @drop="(e: DragEvent, l: Link) => $emit('drop', e, l)"
+                                @edit-link="(l: Link) => $emit('edit-link', l)"
+                                @delete-link="(id: string) => $emit('delete-link', id)"
+                                @toggle-apply="(l: Link) => $emit('toggle-apply', l)"
+                                @toggle-is-app="(l: Link) => $emit('toggle-is-app', l)"
+                                @update-category-order="(o: Record<string, number>) => $emit('update-category-order', o)"
+                                @disable-category="(cat: string) => $emit('disable-category', cat)"
+                                @delete-category="(cat: string) => $emit('delete-category', cat)" />
+                        </template>
+                        <tr v-if="filteredLinks.length === 0">
+                            <td colspan="7" class="p-8 text-center text-muted-foreground text-sm">
+                                No links available
                             </td>
                         </tr>
                     </tbody>
@@ -125,11 +60,11 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from '@/composables/useI18n'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { GripVertical, Edit2, Trash2, Loader2, Bookmark } from 'lucide-vue-next'
-import * as LucideIcons from 'lucide-vue-next'
+import { Trash2, Loader2 } from 'lucide-vue-next'
+import WebNavManageTreeNode from './WebNavManageTreeNode.vue'
 
 const { t } = useI18n()
 
@@ -146,13 +81,21 @@ interface Link {
     }
 }
 
+interface CategoryNode {
+    name: string
+    fullPath: string
+    links: Link[]
+    children: Record<string, CategoryNode>
+}
+
 interface Props {
     filteredLinks: Link[]
     draggingId: string | null
     loading?: boolean
+    categoryOrder?: Record<string, number>
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 
 defineEmits<{
     'drag-start': [event: DragEvent, link: Link]
@@ -163,11 +106,54 @@ defineEmits<{
     'toggle-apply': [link: Link]
     'toggle-is-app': [link: Link]
     'clear-all': []
+    'update-category-order': [order: Record<string, number>]
+    'disable-category': [category: string]
+    'delete-category': [category: string]
 }>()
 
-const getIcon = (name: string) => {
-    if (!name) return Bookmark
-    const iconName = name.charAt(0).toUpperCase() + name.slice(1)
-    return (LucideIcons as any)[iconName] || Bookmark
-}
+const treeNodes = computed(() => {
+    const roots: Record<string, CategoryNode> = {}
+
+    props.filteredLinks.forEach(link => {
+        let catStr = link.content.category || t('tools.webNav.defaultCategory')
+        catStr = catStr.trim()
+
+        const segments = catStr.split(/\s*\/\s*/).filter(Boolean)
+
+        if (segments.length === 0) {
+            segments.push(t('tools.webNav.defaultCategory'))
+        }
+
+        const rootName = segments[0]!
+        if (!roots[rootName]) {
+            roots[rootName] = { name: rootName, fullPath: rootName, links: [], children: {} }
+        }
+
+        let currentNode = roots[rootName]!
+        let currentPath = rootName
+
+        for (let i = 1; i < segments.length; i++) {
+            const seg = segments[i]!
+            currentPath = `${currentPath} / ${seg}`
+
+            if (!currentNode.children[seg]) {
+                currentNode.children[seg] = { name: seg, fullPath: currentPath, links: [], children: {} }
+            }
+            currentNode = currentNode.children[seg]!
+        }
+        currentNode.links.push(link)
+    })
+
+    const sortedRoots: Record<string, CategoryNode> = {}
+    Object.keys(roots).sort((a, b) => {
+        const orderA = props.categoryOrder?.[a] ?? 999999
+        const orderB = props.categoryOrder?.[b] ?? 999999
+        if (orderA !== orderB) return orderA - orderB
+        return a.localeCompare(b)
+    }).forEach(key => {
+        sortedRoots[key] = roots[key]!
+    })
+
+    return sortedRoots
+})
 </script>

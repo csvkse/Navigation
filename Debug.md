@@ -31,4 +31,14 @@ docker volume rm navigation-data
 
 # 8. 删除镜像
 docker rmi ghcr.io/csvkse/navigation:sha-856eef9
+
+# 9. 复制容器数据库文件到当前目录
+docker cp navigation:/app/data/fastdb.db ./fastdb.db
+
+# 10. 复制数据库文件到容器
+docker cp ./fastdb.db navigation:/app/data/fastdb.db
+
+# 11. 检查容器内目录结构
+docker exec navigation ls -la /app/
+docker exec navigation ls -la /app/data/
 ```

@@ -43,6 +43,41 @@ public class FastDbService : IDisposable
     }
 
     /// <summary>
+    /// 按 HashKey 获取所有数据，直接拼接为 JSON 数组字符串，避免 DTO 序列化开销
+    /// </summary>
+    public string GetByHashKeyRawJson(string hashKey)
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = "SELECT Id, Content, HashKey, CreateTime, UpdateTime FROM FastData WHERE HashKey = @hashKey ORDER BY CreateTime DESC";
+        cmd.Parameters.AddWithValue("@hashKey", hashKey);
+
+        using var reader = cmd.ExecuteReader();
+        var sb = new StringBuilder();
+        sb.Append('[');
+        bool first = true;
+        
+        while (reader.Read())
+        {
+            if (!first) sb.Append(',');
+            first = false;
+
+            var id = reader.GetString(0);
+            var content = reader.GetString(1);
+            var hKey = reader.GetString(2);
+            var createTime = reader.GetString(3);
+            var updateTime = reader.IsDBNull(4) ? "null" : $"\"{reader.GetString(4)}\"";
+
+            // If content is already a valid JSON object string (starts with '{'), we embed it directly
+            // Otherwise, we wrap it in a JSON string (for fallback safety)
+            var contentJson = content.TrimStart().StartsWith('{') ? content : JsonSerializer.Serialize(content);
+
+            sb.Append($"{{\"id\":\"{id}\",\"content\":{contentJson},\"hashKey\":\"{hKey}\",\"createTime\":\"{createTime}\",\"updateTime\":{updateTime}}}");
+        }
+        sb.Append(']');
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// 按 HashKey 获取所有数据，按 CreateTime 降序
     /// </summary>
     public List<FastData> GetByHashKey(string hashKey)
@@ -95,6 +130,34 @@ public class FastDbService : IDisposable
     }
 
     /// <summary>
+    /// 批量插入数据
+    /// </summary>
+    public void InsertBulk(IEnumerable<FastData> entities)
+    {
+        using var transaction = _connection.BeginTransaction();
+        using var cmd = _connection.CreateCommand();
+        cmd.Transaction = transaction;
+        cmd.CommandText = "INSERT INTO FastData (Id, Content, HashKey, CreateTime, UpdateTime) VALUES (@id, @content, @hashKey, @createTime, @updateTime)";
+        
+        var pId = cmd.Parameters.Add("@id", SqliteType.Text);
+        var pContent = cmd.Parameters.Add("@content", SqliteType.Text);
+        var pHashKey = cmd.Parameters.Add("@hashKey", SqliteType.Text);
+        var pCreateTime = cmd.Parameters.Add("@createTime", SqliteType.Text);
+        var pUpdateTime = cmd.Parameters.Add("@updateTime", SqliteType.Text);
+
+        foreach (var entity in entities)
+        {
+            pId.Value = entity.Id;
+            pContent.Value = entity.Content;
+            pHashKey.Value = entity.HashKey;
+            pCreateTime.Value = entity.CreateTime;
+            pUpdateTime.Value = (object?)entity.UpdateTime ?? DBNull.Value;
+            cmd.ExecuteNonQuery();
+        }
+        transaction.Commit();
+    }
+
+    /// <summary>
     /// 更新 Content 和 UpdateTime
     /// </summary>
     public bool Update(string id, string hashKey, string content, string updateTime)
@@ -110,6 +173,37 @@ public class FastDbService : IDisposable
     }
 
     /// <summary>
+    /// 批量更新 Content 和 UpdateTime
+    /// </summary>
+    public int UpdateBulk(string hashKey, IEnumerable<(string Id, string Content)> items)
+    {
+        using var transaction = _connection.BeginTransaction();
+        using var cmd = _connection.CreateCommand();
+        cmd.Transaction = transaction;
+        cmd.CommandText = "UPDATE FastData SET Content = @content, UpdateTime = @updateTime WHERE Id = @id AND HashKey = @hashKey";
+
+        var pId = cmd.Parameters.Add("@id", SqliteType.Text);
+        var pContent = cmd.Parameters.Add("@content", SqliteType.Text);
+        var pUpdateTime = cmd.Parameters.Add("@updateTime", SqliteType.Text);
+        var pHashKey = cmd.Parameters.Add("@hashKey", SqliteType.Text);
+
+        var now = DateTime.Now.ToString("o");
+        int count = 0;
+
+        foreach (var (id, content) in items)
+        {
+            pId.Value = id;
+            pContent.Value = content;
+            pUpdateTime.Value = now;
+            pHashKey.Value = hashKey;
+            count += cmd.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
+        return count;
+    }
+
+    /// <summary>
     /// 删除数据
     /// </summary>
     public bool Delete(string id, string hashKey)
@@ -120,6 +214,43 @@ public class FastDbService : IDisposable
         cmd.Parameters.AddWithValue("@hashKey", hashKey);
 
         return cmd.ExecuteNonQuery() > 0;
+    }
+
+    /// <summary>
+    /// 批量删除数据
+    /// </summary>
+    public int DeleteBulk(string hashKey, IEnumerable<string> ids)
+    {
+        using var transaction = _connection.BeginTransaction();
+        using var cmd = _connection.CreateCommand();
+        cmd.Transaction = transaction;
+        cmd.CommandText = "DELETE FROM FastData WHERE Id = @id AND HashKey = @hashKey";
+
+        var pId = cmd.Parameters.Add("@id", SqliteType.Text);
+        var pHashKey = cmd.Parameters.Add("@hashKey", SqliteType.Text);
+
+        int count = 0;
+        foreach (var id in ids)
+        {
+            pId.Value = id;
+            pHashKey.Value = hashKey;
+            count += cmd.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
+        return count;
+    }
+
+    /// <summary>
+    /// 删除某个 HashKey 下的所有数据
+    /// </summary>
+    public int Clear(string hashKey)
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = "DELETE FROM FastData WHERE HashKey = @hashKey";
+        cmd.Parameters.AddWithValue("@hashKey", hashKey);
+
+        return cmd.ExecuteNonQuery();
     }
 
     /// <summary>

@@ -58,8 +58,8 @@ fastdb.MapGet("/doc", () => "FastDB is running!");
 fastdb.MapGet("/", (string key, FastDbService db) =>
 {
     var hashKey = FastDbService.ComputeMd5(key);
-    var list = db.GetByHashKey(hashKey);
-    return list.Select(ToResult).ToArray();
+    var rawJson = db.GetByHashKeyRawJson(hashKey);
+    return Results.Content(rawJson, "application/json");
 });
 
 // 只读查询 - 通过 ID 的 GUID
@@ -69,8 +69,8 @@ fastdb.MapGet("/readonly", (Guid readOnlyId, FastDbService db) =>
     if (data == null)
         return Results.NotFound();
 
-    var list = db.GetByHashKey(data.HashKey);
-    return Results.Ok(list.Select(ToResult).ToArray());
+    var rawJson = db.GetByHashKeyRawJson(data.HashKey);
+    return Results.Content(rawJson, "application/json");
 });
 
 // 根据 ID 获取指定数据
@@ -104,6 +104,30 @@ fastdb.MapPost("/", (string key, JsonElement data, FastDbService db) =>
     return ToResult(entity);
 });
 
+// 批量新增数据
+fastdb.MapPost("/bulk", (string key, JsonElement dataList, FastDbService db) =>
+{
+    var hashKey = FastDbService.ComputeMd5(key);
+    if (dataList.ValueKind != JsonValueKind.Array)
+        return Results.BadRequest("Expected a JSON array.");
+
+    var entities = new List<FastData>();
+    var now = DateTime.Now.ToString("o");
+    foreach (var data in dataList.EnumerateArray())
+    {
+        entities.Add(new FastData
+        {
+            Id = Guid.NewGuid().ToString(),
+            Content = data.GetRawText(),
+            HashKey = hashKey,
+            CreateTime = now
+        });
+    }
+    
+    db.InsertBulk(entities);
+    return Results.Ok(entities.Count.ToString());
+});
+
 // 更新数据
 fastdb.MapPut("/{id}", (Guid id, string key, JsonElement data, FastDbService db) =>
 {
@@ -116,11 +140,83 @@ fastdb.MapPut("/{id}", (Guid id, string key, JsonElement data, FastDbService db)
     return Results.Ok(true);
 });
 
+// 批量更新数据
+fastdb.MapPut("/bulk", (string key, JsonElement dataList, FastDbService db) =>
+{
+    var hashKey = FastDbService.ComputeMd5(key);
+    if (dataList.ValueKind != JsonValueKind.Array)
+        return Results.BadRequest("Expected a JSON array.");
+
+    var items = new List<(string Id, string Content)>();
+    foreach (var item in dataList.EnumerateArray())
+    {
+        if (!item.TryGetProperty("id", out var idProp))
+            continue;
+
+        var itemId = idProp.GetString();
+        if (string.IsNullOrEmpty(itemId))
+            continue;
+
+        // 从 item 中提取 content：移除 id 字段，其余作为 content
+        if (item.TryGetProperty("content", out var contentProp))
+        {
+            items.Add((itemId, contentProp.GetRawText()));
+        }
+        else
+        {
+            // 如果没有 content 字段，则把整个对象（去掉 id）作为 content
+            var dict = new Dictionary<string, JsonElement>();
+            foreach (var prop in item.EnumerateObject())
+            {
+                if (prop.Name != "id")
+                    dict[prop.Name] = prop.Value.Clone();
+            }
+            items.Add((itemId, JsonSerializer.Serialize(dict)));
+        }
+    }
+
+    if (items.Count == 0)
+        return Results.BadRequest("No valid items to update.");
+
+    var count = db.UpdateBulk(hashKey, items);
+    return Results.Ok(count);
+});
+
 // 删除数据
 fastdb.MapDelete("/{id}", (Guid id, string key, FastDbService db) =>
 {
     var hashKey = FastDbService.ComputeMd5(key);
     return db.Delete(id.ToString(), hashKey);
+});
+
+// 批量删除数据
+fastdb.MapPost("/bulk-delete", (string key, JsonElement dataList, FastDbService db) =>
+{
+    var hashKey = FastDbService.ComputeMd5(key);
+    if (dataList.ValueKind != JsonValueKind.Array)
+        return Results.BadRequest("Expected a JSON array of IDs.");
+
+    var ids = new List<string>();
+    foreach (var item in dataList.EnumerateArray())
+    {
+        var id = item.GetString();
+        if (!string.IsNullOrEmpty(id))
+            ids.Add(id);
+    }
+
+    if (ids.Count == 0)
+        return Results.BadRequest("No valid IDs to delete.");
+
+    var count = db.DeleteBulk(hashKey, ids);
+    return Results.Ok(count);
+});
+
+// 清空缓存/删除某个Key下所有数据
+fastdb.MapDelete("/clear", (string key, FastDbService db) =>
+{
+    var hashKey = FastDbService.ComputeMd5(key);
+    var deletedCount = db.Clear(hashKey);
+    return Results.Ok(deletedCount.ToString());
 });
 
 app.Run();
@@ -153,11 +249,13 @@ static FastDataResult ToResult(FastData item)
 
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(bool))]
+[JsonSerializable(typeof(int))]
 [JsonSerializable(typeof(FastData))]
 [JsonSerializable(typeof(FastData[]))]
 [JsonSerializable(typeof(FastDataResult))]
 [JsonSerializable(typeof(FastDataResult[]))]
 [JsonSerializable(typeof(JsonElement))]
+[JsonSerializable(typeof(Dictionary<string, JsonElement>))]
 internal partial class AppJsonSerializerContext : JsonSerializerContext
 {
 }

@@ -20,9 +20,11 @@
 
         <!-- Dashboard Content -->
         <WebNavManageView v-if="isManageMode && manageTab === 'data'" :filtered-links="filteredLinks"
-            :dragging-id="draggingId" :loading="loading" @drag-start="handleDragStart" @drag-end="handleDragEnd"
-            @drop="handleDrop" @edit-link="openModal" @delete-link="handleDelete" @toggle-apply="toggleApply"
-            @toggle-is-app="toggleIsApp" @clear-all="handleClearAll" />
+            :dragging-id="draggingId" :loading="loading" :category-order="categoryOrder" @drag-start="handleDragStart"
+            @drag-end="handleDragEnd" @drop="handleDrop" @edit-link="openModal" @delete-link="handleDelete"
+            @toggle-apply="toggleApply" @toggle-is-app="toggleIsApp" @clear-all="handleClearAll"
+            @update-category-order="handleUpdateCategoryOrder" @disable-category="handleCategoryDisable"
+            @delete-category="handleCategoryDelete" />
 
         <!-- Navigation View -->
         <!-- 骨架屏状态 -->
@@ -58,7 +60,8 @@
             </Button>
         </div>
 
-        <div v-else class="space-y-10">
+        <div v-else class="space-y-10" @dragover.prevent
+            @drop="$emit('drop', $event, { content: { isApp: false, category: '', isRootDrop: true } })">
             <!-- App Grid Section -->
             <WebNavAppGrid :app-groups="appGroups" :layout-scheme="layoutScheme"
                 :is-manage-mode="isManageMode && manageTab === 'drag'" :dragging-id="draggingId" :icons="ICONS"
@@ -68,8 +71,10 @@
             <!-- Bookmark Columns -->
             <WebNavBookmarks :bookmark-groups="bookmarkGroups" :grouped-bookmarks="groupedBookmarks"
                 :is-manage-mode="isManageMode && manageTab === 'drag'" :dragging-id="draggingId"
-                :layout-scheme="layoutScheme" @drag-start="handleDragStart" @drag-end="handleDragEnd" @drop="handleDrop"
-                @open-link="openLink" @edit-link="openModal" @delete-link="handleDelete" />
+                :layout-scheme="layoutScheme" :category-order="categoryOrder" @drag-start="handleDragStart"
+                @drag-end="handleDragEnd" @drop="handleDrop" @open-link="openLink" @edit-link="openModal"
+                @delete-link="handleDelete" @update-category-order="handleUpdateCategoryOrder"
+                @disable-category="handleCategoryDisable" @delete-category="handleCategoryDelete" />
         </div>
 
         <!-- Link Modal -->
@@ -87,7 +92,8 @@
             @import="handleBulkImport" />
 
         <WebNavSuspended :suspended-links="suspendedLinks" :is-manage-mode="isManageMode && manageTab === 'drag'"
-            @drop="handleDrop" @drag-start="handleDragStart" @drag-end="handleDragEnd" @delete-link="handleDelete" />
+            @drop="handleDrop" @drag-start="handleDragStart" @drag-end="handleDragEnd" @delete-link="handleDelete"
+            @restore-link="handleRestoreLink" @restore-all="handleRestoreAll" />
 
         <!-- Scroll To Top Button -->
         <Transition enter-active-class="transition-all duration-300 ease-out"
@@ -163,6 +169,9 @@ interface LinkContent {
 interface LinkRecord {
     id: string
     content: LinkContent
+    hashKey?: string
+    createTime?: string
+    updateTime?: string
 }
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
@@ -180,10 +189,12 @@ const manageTab = ref<'drag' | 'data'>('drag')
 // Scroll to Top Logic
 const showScrollTop = ref(false)
 const scrollToTop = () => {
-    window.scrollTo({
-        top: 0,
-        behavior: 'smooth'
-    })
+    const scrollContainer = document.querySelector('main.overflow-y-auto') || document.querySelector('#main-content')?.parentElement
+    if (scrollContainer) {
+        scrollContainer.scrollTo({ top: 0, behavior: 'smooth' })
+    } else {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
 }
 
 const router = useRouter()
@@ -337,6 +348,50 @@ const bulkModal = ref({
 const themeConfigId = ref<string>('')
 let saveThemeTimer: any = null
 let themeConfigDirty = false
+
+const categoryOrderId = ref<string>('')
+const categoryOrder = ref<Record<string, number>>({})
+let saveCategoryOrderTimer: any = null
+
+const doSaveCategoryOrder = async () => {
+    if (isReadOnly.value) return
+    const payload = {
+        type: 'WEBNAV_CATEGORY_ORDER',
+        order: categoryOrder.value
+    }
+
+    try {
+        const url = categoryOrderId.value
+            ? `${BASE_URL}/FastDB/${categoryOrderId.value}?key=${encodeURIComponent(currentKey.value)}`
+            : `${BASE_URL}/FastDB?key=${encodeURIComponent(currentKey.value)}`
+
+        const method = categoryOrderId.value ? 'PUT' : 'POST'
+
+        const res = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+
+        if (res.ok && !categoryOrderId.value) {
+            const data = await res.json()
+            if (data.id) categoryOrderId.value = data.id
+        }
+    } catch (e) {
+        console.error('Failed to save category order', e)
+    }
+}
+
+const saveCategoryOrder = () => {
+    if (isReadOnly.value) return
+    clearTimeout(saveCategoryOrderTimer)
+    saveCategoryOrderTimer = setTimeout(doSaveCategoryOrder, 1500)
+}
+
+const handleUpdateCategoryOrder = (newOrder: Record<string, number>) => {
+    categoryOrder.value = newOrder
+    saveCategoryOrder()
+}
 
 const doSaveThemeConfig = async () => {
     if (isReadOnly.value) return
@@ -735,9 +790,16 @@ const fetchData = async (silent = false) => {
             if (!hasLocalNight && configItem.content.night) nightScheme.value = configItem.content.night
         }
 
+        const orderItem = rawItems.find((item: any) => item.content?.type === 'WEBNAV_CATEGORY_ORDER')
+        if (orderItem) {
+            categoryOrderId.value = orderItem.id
+            categoryOrder.value = orderItem.content.order || {}
+        }
+
         const newData: LinkRecord[] = rawItems.filter((item: any) =>
             item.content?.type !== 'READ_ONLY_ANCHOR' &&
-            item.content?.type !== 'WEBNAV_THEME_CONFIG'
+            item.content?.type !== 'WEBNAV_THEME_CONFIG' &&
+            item.content?.type !== 'WEBNAV_CATEGORY_ORDER'
         )
 
         const currentLinks = links.value
@@ -747,6 +809,10 @@ const fetchData = async (silent = false) => {
         const mergedLinks = newData.map((newItem: LinkRecord) => {
             const oldItem = currentIdMap.get(newItem.id)
             if (oldItem) {
+                // 如果更新时间一致，直接复用老对象，跳过高昂的 JSON.stringify()
+                if (oldItem.updateTime === newItem.updateTime) {
+                    return oldItem
+                }
                 const oldContentStr = JSON.stringify(oldItem.content)
                 const newContentStr = JSON.stringify(newItem.content)
 
@@ -824,8 +890,95 @@ const handleDrop = async (e: DragEvent, target: any) => {
 
     const sourceId = e.dataTransfer?.getData('text/plain')
 
-    // 1. Internal Move
-    if (draggingId.value && sourceId && sourceId !== target.id && !isReadOnly.value) {
+    // 0. Folder Move or Suspend
+    if (draggingId.value && sourceId?.startsWith('folder:') && !isReadOnly.value) {
+        const oldPrefix = sourceId.substring(7)
+
+        // 0a. Folder Suspend (drag to suspended area)
+        if (target.content?.isApplied === false) {
+            const bulkItems: { id: string; content: any }[] = []
+            links.value.forEach(l => {
+                const cat = l.content.category || ''
+                if (cat === oldPrefix || cat.startsWith(oldPrefix + ' /')) {
+                    l.content.isApplied = false
+                    bulkItems.push({ id: l.id, content: { ...l.content } })
+                }
+            })
+
+            if (bulkItems.length > 0) {
+                links.value = [...links.value]
+                updateCache()
+
+                fetch(`${BASE_URL}/FastDB/bulk?key=${encodeURIComponent(currentKey.value)}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(bulkItems)
+                }).then(() => {
+                    toast.success(`${oldPrefix}: ${bulkItems.length} links suspended`)
+                    fetchData(true)
+                }).catch(() => {
+                    toast.error(t('tools.webNav.moveFailed') || 'Suspend failed')
+                    fetchData(true)
+                })
+            }
+
+            draggingId.value = null
+            return
+        }
+
+        let droppedCategory = target.content?.category || t('tools.webNav.defaultCategory')
+
+        // Support dropping to root
+        if (target.content?.isRootDrop) {
+            droppedCategory = ''
+        }
+
+        // Cannot drop into itself or its own children
+        if ((droppedCategory && droppedCategory === oldPrefix) || droppedCategory.startsWith(oldPrefix + ' /')) {
+            toast.error(t('tools.webNav.moveFailed') || 'Cannot move folder into itself')
+            draggingId.value = null
+            return
+        }
+
+        const leafName = oldPrefix.split('/').pop()?.trim() || ''
+        const newPrefix = droppedCategory ? (leafName ? `${droppedCategory} / ${leafName}` : droppedCategory) : leafName
+
+        let changedCount = 0
+        const bulkItems: { id: string; content: any }[] = []
+
+        links.value.forEach(l => {
+            const cat = l.content.category || ''
+            if (cat === oldPrefix || cat.startsWith(oldPrefix + ' /')) {
+                const suffix = cat.substring(oldPrefix.length)
+                l.content.category = newPrefix + suffix
+                changedCount++
+                bulkItems.push({ id: l.id, content: { ...l.content } })
+            }
+        })
+
+        if (changedCount > 0) {
+            links.value = [...links.value]
+            updateCache()
+
+            fetch(`${BASE_URL}/FastDB/bulk?key=${encodeURIComponent(currentKey.value)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(bulkItems)
+            }).then(() => {
+                toast.success(t('tools.webNav.moved') || 'Folder moved')
+                fetchData(true)
+            }).catch(() => {
+                toast.error(t('tools.webNav.moveFailed') || 'Move failed')
+                fetchData(true)
+            })
+        }
+
+        draggingId.value = null
+        return
+    }
+
+    // 1. Internal Move (Link)
+    if (draggingId.value && sourceId && sourceId !== target.id && !isReadOnly.value && !sourceId.startsWith('folder:')) {
         const source = links.value.find(l => l.id === sourceId)
         if (source) {
             if (target.content.isApplied !== undefined) {
@@ -1013,12 +1166,12 @@ const handleClearAll = async () => {
     if (!confirm(t('tools.webNav.clearConfirm'))) return
     loading.value = true
     try {
-        const deletePromises = links.value.map(l =>
-            fetch(`${BASE_URL}/FastDB/${l.id}?key=${encodeURIComponent(currentKey.value)}`, { method: 'DELETE' })
-        )
-        await Promise.all(deletePromises)
+        const res = await fetch(`${BASE_URL}/FastDB/clear?key=${encodeURIComponent(currentKey.value)}`, { method: 'DELETE' })
+        if (!res.ok) throw new Error('Clear failed')
         links.value = []
         toast.success(t('tools.webNav.clearAll'))
+    } catch (e) {
+        toast.error('Clear failed')
     } finally { loading.value = false }
 }
 
@@ -1028,7 +1181,7 @@ const handleBulkImport = async () => {
     bulkModal.value.loading = true
     const lines = bulkModal.value.text.split('\n').filter(l => l.trim())
     const newLinks = lines.map(line => {
-        const [name, url, note, icon, category] = line.split('\t').map(s => s?.trim() || '')
+        const [name, url, note, icon, category, color] = line.split('\t').map(s => s?.trim() || '')
         if (!name || !url) return null
         const actualCategory = category || (note && note !== '[Flare 应用]' ? note : '') || t('tools.webNav.defaultCategory')
         return {
@@ -1038,7 +1191,7 @@ const handleBulkImport = async () => {
             category: actualCategory,
             isApp: !!(note?.includes('[Flare 应用]')),
             isApplied: true,
-            color: '',
+            color: color || '',
             sortIndex: 0
         }
     }).filter(Boolean)
@@ -1049,14 +1202,14 @@ const handleBulkImport = async () => {
     }
 
     try {
-        const promises = newLinks.map(link =>
-            fetch(`${BASE_URL}/FastDB?key=${encodeURIComponent(currentKey.value)}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(link)
-            })
-        )
-        await Promise.all(promises)
+        const res = await fetch(`${BASE_URL}/FastDB/bulk?key=${encodeURIComponent(currentKey.value)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newLinks)
+        })
+
+        if (!res.ok) throw new Error('Bulk API response not ok')
+
         toast.success(`Imported ${newLinks.length} links`)
         bulkModal.value.open = false
         fetchData()
@@ -1075,11 +1228,134 @@ const handleBulkExport = () => {
             c.url,
             c.isApp ? '[Flare 应用]' : '',
             c.icon || '',
-            c.category || ''
+            c.category || '',
+            c.color || ''
         ].join('\t')
     }).join('\n')
     bulkModal.value.text = text
     bulkModal.value.open = true
+}
+
+const handleCategoryDisable = async (categoryPrefix: string) => {
+    console.log('[handleCategoryDisable] categoryPrefix:', categoryPrefix, 'isReadOnly:', isReadOnly.value, 'totalLinks:', links.value.length)
+    if (isReadOnly.value) return toast.error(t('tools.webNav.readOnlyAlert'))
+
+    // Find all matching links
+    const matchingLinks = links.value.filter(l => {
+        const cat = l.content.category || ''
+        return cat === categoryPrefix || cat.startsWith(categoryPrefix + ' /')
+    })
+
+    if (matchingLinks.length === 0) return
+
+    // Toggle: if all are disabled, enable them; otherwise disable all
+    const allDisabled = matchingLinks.every(l => l.content.isApplied === false)
+    const newAppliedState = allDisabled // if all disabled → enable (true); else → disable (false)
+
+    const bulkItems: { id: string; content: any }[] = []
+    matchingLinks.forEach(l => {
+        l.content.isApplied = newAppliedState
+        bulkItems.push({ id: l.id, content: { ...l.content } })
+    })
+
+    links.value = [...links.value]
+    updateCache()
+
+    try {
+        await fetch(`${BASE_URL}/FastDB/bulk?key=${encodeURIComponent(currentKey.value)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(bulkItems)
+        })
+        const actionLabel = newAppliedState
+            ? (t('tools.webNav.restored') || 'links restored')
+            : (t('tools.webNav.suspended') || 'links suspended')
+        toast.success(`${categoryPrefix}: ${bulkItems.length} ${actionLabel}`)
+        fetchData(true)
+    } catch (e) {
+        toast.error(t('tools.webNav.moveFailed') || 'Toggle failed')
+        fetchData(true)
+    }
+}
+
+const handleCategoryDelete = async (categoryPrefix: string) => {
+    console.log('[handleCategoryDelete] categoryPrefix:', categoryPrefix, 'isReadOnly:', isReadOnly.value, 'totalLinks:', links.value.length)
+    if (isReadOnly.value) return toast.error(t('tools.webNav.readOnlyAlert'))
+
+    const matchingLinks = links.value.filter(l => {
+        const cat = l.content.category || ''
+        return cat === categoryPrefix || cat.startsWith(categoryPrefix + ' /')
+    })
+
+    if (matchingLinks.length === 0) return
+    if (!confirm(`${t('tools.webNav.deleteCategoryConfirm') || 'Delete all links under'} "${categoryPrefix}"? (${matchingLinks.length} ${t('tools.webNav.links') || 'links'})`)) return
+
+    loading.value = true
+    try {
+        const ids = matchingLinks.map(l => l.id)
+        await fetch(`${BASE_URL}/FastDB/bulk-delete?key=${encodeURIComponent(currentKey.value)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(ids)
+        })
+        toast.success(`${categoryPrefix}: ${matchingLinks.length} ${t('tools.webNav.deleted') || 'links deleted'}`)
+        fetchData()
+    } catch (e) {
+        toast.error(t('tools.webNav.deleteFailed'))
+    } finally {
+        loading.value = false
+    }
+}
+
+const handleRestoreLink = async (id: string) => {
+    if (isReadOnly.value) return
+    const link = links.value.find(l => l.id === id)
+    if (!link) return
+
+    link.content.isApplied = true
+    links.value = [...links.value]
+    updateCache()
+
+    try {
+        await fetch(`${BASE_URL}/FastDB/${id}?key=${encodeURIComponent(currentKey.value)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(link.content)
+        })
+        toast.success(t('tools.webNav.moved'))
+        fetchData(true)
+    } catch (e) {
+        toast.error(t('tools.webNav.moveFailed'))
+        fetchData(true)
+    }
+}
+
+const handleRestoreAll = async () => {
+    if (isReadOnly.value) return
+    const suspended = links.value.filter(l => l.content.isApplied === false)
+    if (suspended.length === 0) return
+
+    const bulkItems: { id: string; content: any }[] = []
+    suspended.forEach(l => {
+        l.content.isApplied = true
+        bulkItems.push({ id: l.id, content: { ...l.content } })
+    })
+
+    links.value = [...links.value]
+    updateCache()
+
+    try {
+        await fetch(`${BASE_URL}/FastDB/bulk?key=${encodeURIComponent(currentKey.value)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(bulkItems)
+        })
+        toast.success(`${bulkItems.length} ${t('tools.webNav.restored') || 'links restored'}`)
+        fetchData(true)
+    } catch (e) {
+        toast.error(t('tools.webNav.moveFailed'))
+        fetchData(true)
+    }
 }
 
 // --- Utils ---
@@ -1423,9 +1699,13 @@ const groupedBookmarks = computed(() => {
     return sortedGroups
 })
 
+const displayedLinks = computed(() => {
+    return filteredLinks.value
+})
+
 const APP_CATS = ['应用', 'Apps', 'Primary', '常用', 'Application']
 const appGroups = computed(() => {
-    return filteredLinks.value.filter(l => {
+    return displayedLinks.value.filter(l => {
         if (l.content.isApp) return true
         const cat = l.content.category || ''
         return APP_CATS.includes(cat)
@@ -1433,7 +1713,7 @@ const appGroups = computed(() => {
 })
 
 const bookmarkGroups = computed(() => {
-    return filteredLinks.value.filter(l => {
+    return displayedLinks.value.filter(l => {
         if (l.content.isApp) return false
         const cat = l.content.category || ''
         return !APP_CATS.includes(cat)
@@ -1499,11 +1779,15 @@ watch(currentKey, () => {
 
 watch([() => t('tools.webNav.title'), currentUser], ([newTitle, user]) => {
     if (typeof document !== 'undefined') {
+        let title: string
         if (user?.username) {
-            document.title = user.username
+            title = user.username
         } else {
-            document.title = newTitle || 'WebNav'
+            title = newTitle || 'WebNav'
         }
+        document.title = title
+        // 持久化标题，防止刷新时闪烁
+        try { localStorage.setItem('webnav_page_title', title) } catch (e) { }
     }
 }, { immediate: true, deep: true })
 </script>

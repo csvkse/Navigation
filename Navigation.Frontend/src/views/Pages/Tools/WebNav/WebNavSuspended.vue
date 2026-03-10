@@ -31,9 +31,17 @@
 
                     <div class="flex items-center justify-between mb-3 px-1">
                         <h3 class="font-bold text-sm text-foreground/80">{{ t('tools.webNav.suspendedLinks') }}</h3>
-                        <Button variant="ghost" size="icon" class="h-6 w-6 rounded-full" @click="isOpen = false">
-                            <X class="h-4 w-4" />
-                        </Button>
+                        <div class="flex items-center gap-1">
+                            <Button v-if="suspendedLinks.length > 0" variant="ghost" size="sm"
+                                class="h-6 px-2 rounded-full text-[10px] font-bold text-primary hover:bg-primary/10"
+                                @click="$emit('restore-all')">
+                                <RotateCcw class="h-3 w-3 mr-1" />
+                                {{ t('tools.webNav.enableAll') || 'Enable All' }}
+                            </Button>
+                            <Button variant="ghost" size="icon" class="h-6 w-6 rounded-full" @click="isOpen = false">
+                                <X class="h-4 w-4" />
+                            </Button>
+                        </div>
                     </div>
 
                     <div class="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
@@ -64,6 +72,12 @@
                                 </div>
                             </div>
 
+                            <!-- Restore Action -->
+                            <Button variant="ghost" size="icon"
+                                class="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-primary hover:bg-primary/10 hover:text-primary rounded-lg"
+                                @click.stop="$emit('restore-link', link.id)">
+                                <Undo2 class="h-3.5 w-3.5" />
+                            </Button>
                             <!-- Delete Action -->
                             <Button variant="ghost" size="icon"
                                 class="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:bg-destructive/10 hover:text-destructive rounded-lg"
@@ -81,7 +95,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { Button } from '@/components/ui/button'
-import { ArchiveRestore, Trash2, X, Bookmark } from 'lucide-vue-next'
+import { ArchiveRestore, Trash2, X, Bookmark, Undo2, RotateCcw } from 'lucide-vue-next'
 import * as LucideIcons from 'lucide-vue-next'
 import { useI18n } from '@/composables/useI18n'
 
@@ -113,6 +127,8 @@ defineEmits<{
     'drag-end': []
     'drop': [event: DragEvent, target: any]
     'delete-link': [id: string]
+    'restore-link': [id: string]
+    'restore-all': []
 }>()
 
 const getIcon = (name: string) => {
