@@ -47,11 +47,12 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg', 'logo.svg'],
+      includeAssets: ['apple-touch-icon.png', 'logo.svg'],
       manifest: {
         name: 'WebTool - 极简工具箱',
         short_name: 'WebTool',
         description: '一个功能丰富的网页版工具箱',
+        lang: 'zh-CN',
         theme_color: '#6366f1',
         background_color: '#ffffff',
         display: 'standalone',
