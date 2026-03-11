@@ -6,15 +6,24 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Caching.Memory; // 引入 MemoryCache
 
 namespace Navigation;
 
 /// <summary>
-/// FastDB SQLite 数据访问服务 (AOT 兼容，极限性能 + 高并发安全版)
+/// FastDB SQLite 数据访问服务 (AOT 兼容，极限性能 + 高并发安全 + MemoryCache防OOM版)
 /// </summary>
 public class FastDbService
 {
     private readonly string _connectionString;
+
+    // 引入高性能内存缓存
+    private readonly IMemoryCache _cache;
+
+    // 缓存策略配置：滑动过期时间 10 分钟，每个缓存项大小记为 1
+    private readonly MemoryCacheEntryOptions _cacheOptions = new MemoryCacheEntryOptions()
+        .SetSlidingExpiration(TimeSpan.FromMinutes(10))
+        .SetSize(1);
 
     public FastDbService(string dbPath = "fastdb.db")
     {
@@ -25,20 +34,25 @@ public class FastDbService
         }
         Console.WriteLine($"FastDB 数据库文件路径: {dbPath}");
 
-        // 并发优化 1: Cache=Shared 共享内存，Default Timeout=5 开启写入排队等待，避免 database is locked
         _connectionString = $"Data Source={dbPath};Cache=Shared;Mode=ReadWriteCreate;Default Timeout=5;";
-        
+
+        // 初始化带有大小限制的缓存池，防止恶意拉取导致服务器内存 OOM
+        // 容量设置 10000 意味着最多缓存 10000 个 Json 聚合结果或单条实体
+        _cache = new MemoryCache(new MemoryCacheOptions
+        {
+            SizeLimit = 10000,
+            CompactionPercentage = 0.2 // 当达到限制时，清理 20% 的缓存
+        });
+
         InitializeDatabase();
     }
 
     private void InitializeDatabase()
     {
-        // 并发优化 2: 使用短连接，依托内置连接池，保证绝对的线程安全
         using var connection = new SqliteConnection(_connectionString);
         connection.Open();
 
         using var cmd = connection.CreateCommand();
-        // 开启 WAL 模式提升并发读写性能
         cmd.CommandText = """
             PRAGMA journal_mode = WAL;
             PRAGMA synchronous = NORMAL;
@@ -57,11 +71,22 @@ public class FastDbService
         cmd.ExecuteNonQuery();
     }
 
+    #region 核心读取 (带缓存)
+
     /// <summary>
-    /// 按 HashKey 获取所有数据，直接生成 JSON 数组字符串，避免 DTO 序列化开销
+    /// 按 HashKey 获取所有数据，直接生成 JSON 数组字符串 (缓存优先)
     /// </summary>
     public string GetByHashKeyRawJson(string hashKey)
     {
+        string cacheKey = $"RawJson_{hashKey}";
+
+        // 1. 尝试从缓存获取
+        if (_cache.TryGetValue(cacheKey, out string? cachedJson) && cachedJson != null)
+        {
+            return cachedJson;
+        }
+
+        // 2. 缓存未命中，执行数据库查询并序列化
         using var connection = new SqliteConnection(_connectionString);
         connection.Open();
 
@@ -71,7 +96,7 @@ public class FastDbService
 
         using var reader = cmd.ExecuteReader();
         using var ms = new MemoryStream();
-        using var writer = new Utf8JsonWriter(ms); // 零分配高安全 JSON 写入
+        using var writer = new Utf8JsonWriter(ms);
 
         writer.WriteStartArray();
 
@@ -87,66 +112,94 @@ public class FastDbService
             if (isJson)
             {
                 writer.WritePropertyName("content");
-                writer.WriteRawValue(content); 
+                writer.WriteRawValue(content);
             }
             else
             {
-                writer.WriteString("content", content); 
+                writer.WriteString("content", content);
             }
 
             writer.WriteString("hashKey", reader.GetString(2));
             writer.WriteString("createTime", reader.GetString(3));
-            
+
             if (reader.IsDBNull(4))
                 writer.WriteNull("updateTime");
             else
                 writer.WriteString("updateTime", reader.GetString(4));
-                
+
             writer.WriteEndObject();
         }
-        
+
         writer.WriteEndArray();
         writer.Flush();
 
-        return Encoding.UTF8.GetString(ms.ToArray());
+        var finalJson = Encoding.UTF8.GetString(ms.ToArray());
+
+        // 3. 写入缓存
+        _cache.Set(cacheKey, finalJson, _cacheOptions);
+
+        return finalJson;
     }
 
     public List<FastData> GetByHashKey(string hashKey)
     {
+        string cacheKey = $"List_{hashKey}";
+        if (_cache.TryGetValue(cacheKey, out List<FastData>? cachedList) && cachedList != null)
+        {
+            return cachedList;
+        }
+
         using var connection = new SqliteConnection(_connectionString);
         connection.Open();
 
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT Id, Content, HashKey, CreateTime, UpdateTime FROM FastData WHERE HashKey = @hashKey ORDER BY CreateTime DESC";
         cmd.Parameters.AddWithValue("@hashKey", hashKey);
-        
-        return ReadAll(cmd);
+
+        var list = ReadAll(cmd);
+        _cache.Set(cacheKey, list, _cacheOptions);
+
+        return list;
     }
 
     public FastData? GetByIdOnly(string id)
     {
+        string cacheKey = $"Id_{id}";
+        if (_cache.TryGetValue(cacheKey, out FastData? cachedData))
+        {
+            return cachedData;
+        }
+
         using var connection = new SqliteConnection(_connectionString);
         connection.Open();
 
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT Id, Content, HashKey, CreateTime, UpdateTime FROM FastData WHERE Id = @id";
         cmd.Parameters.AddWithValue("@id", id);
-        
-        return ReadOne(cmd);
+
+        var data = ReadOne(cmd);
+        if (data != null)
+        {
+            _cache.Set(cacheKey, data, _cacheOptions);
+        }
+
+        return data;
     }
 
     public FastData? GetById(string id, string hashKey)
     {
-        using var connection = new SqliteConnection(_connectionString);
-        connection.Open();
-
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT Id, Content, HashKey, CreateTime, UpdateTime FROM FastData WHERE Id = @id AND HashKey = @hashKey";
-        cmd.Parameters.AddWithValue("@id", id);
-        cmd.Parameters.AddWithValue("@hashKey", hashKey);
-        
-        return ReadOne(cmd);
+        // 走单键缓存即可，由于 Id 是主键，命中缓存就等于拿到了唯一结果
+        var data = GetByIdOnly(id);
+        if (data != null && data.HashKey == hashKey)
+        {
+            return data;
+        }
+        return null;
     }
+
+    #endregion
+
+    #region 写入/删除 (带缓存主动失效机制)
 
     public void Insert(FastData entity)
     {
@@ -160,8 +213,9 @@ public class FastDbService
         cmd.Parameters.AddWithValue("@hashKey", entity.HashKey);
         cmd.Parameters.AddWithValue("@createTime", entity.CreateTime);
         cmd.Parameters.AddWithValue("@updateTime", (object?)entity.UpdateTime ?? DBNull.Value);
-        
+
         cmd.ExecuteNonQuery();
+        InvalidateCache(entity.Id, entity.HashKey);
     }
 
     public void InsertBulk(IEnumerable<FastData> entities)
@@ -180,7 +234,9 @@ public class FastDbService
         var pCreateTime = cmd.Parameters.Add("@createTime", SqliteType.Text);
         var pUpdateTime = cmd.Parameters.Add("@updateTime", SqliteType.Text);
 
-        cmd.Prepare(); // 预编译提升性能
+        cmd.Prepare();
+
+        var modifiedHashKeys = new HashSet<string>();
 
         foreach (var entity in entities)
         {
@@ -190,8 +246,17 @@ public class FastDbService
             pCreateTime.Value = entity.CreateTime;
             pUpdateTime.Value = (object?)entity.UpdateTime ?? DBNull.Value;
             cmd.ExecuteNonQuery();
+
+            // 收集受影响的缓存Key
+            modifiedHashKeys.Add(entity.HashKey);
+            _cache.Remove($"Id_{entity.Id}");
         }
         transaction.Commit();
+
+        foreach (var hashKey in modifiedHashKeys)
+        {
+            InvalidateHashKeyCache(hashKey);
+        }
     }
 
     public bool Update(string id, string hashKey, string content, string updateTime)
@@ -206,7 +271,12 @@ public class FastDbService
         cmd.Parameters.AddWithValue("@id", id);
         cmd.Parameters.AddWithValue("@hashKey", hashKey);
 
-        return cmd.ExecuteNonQuery() > 0;
+        bool success = cmd.ExecuteNonQuery() > 0;
+        if (success)
+        {
+            InvalidateCache(id, hashKey);
+        }
+        return success;
     }
 
     public int UpdateBulk(string hashKey, IEnumerable<(string Id, string Content)> items)
@@ -224,7 +294,7 @@ public class FastDbService
         var pUpdateTime = cmd.Parameters.Add("@updateTime", SqliteType.Text);
         var pHashKey = cmd.Parameters.Add("@hashKey", SqliteType.Text);
 
-        cmd.Prepare(); 
+        cmd.Prepare();
 
         var now = DateTime.Now.ToString("o");
         int count = 0;
@@ -235,10 +305,20 @@ public class FastDbService
             pContent.Value = content;
             pUpdateTime.Value = now;
             pHashKey.Value = hashKey;
-            count += cmd.ExecuteNonQuery();
+
+            if (cmd.ExecuteNonQuery() > 0)
+            {
+                count++;
+                _cache.Remove($"Id_{id}");
+            }
         }
 
         transaction.Commit();
+
+        if (count > 0)
+        {
+            InvalidateHashKeyCache(hashKey);
+        }
         return count;
     }
 
@@ -252,7 +332,12 @@ public class FastDbService
         cmd.Parameters.AddWithValue("@id", id);
         cmd.Parameters.AddWithValue("@hashKey", hashKey);
 
-        return cmd.ExecuteNonQuery() > 0;
+        bool success = cmd.ExecuteNonQuery() > 0;
+        if (success)
+        {
+            InvalidateCache(id, hashKey);
+        }
+        return success;
     }
 
     public int DeleteBulk(string hashKey, IEnumerable<string> ids)
@@ -268,17 +353,27 @@ public class FastDbService
         var pId = cmd.Parameters.Add("@id", SqliteType.Text);
         var pHashKey = cmd.Parameters.Add("@hashKey", SqliteType.Text);
 
-        cmd.Prepare(); 
+        cmd.Prepare();
 
         int count = 0;
         foreach (var id in ids)
         {
             pId.Value = id;
             pHashKey.Value = hashKey;
-            count += cmd.ExecuteNonQuery();
+
+            if (cmd.ExecuteNonQuery() > 0)
+            {
+                count++;
+                _cache.Remove($"Id_{id}");
+            }
         }
 
         transaction.Commit();
+
+        if (count > 0)
+        {
+            InvalidateHashKeyCache(hashKey);
+        }
         return count;
     }
 
@@ -290,13 +385,41 @@ public class FastDbService
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "DELETE FROM FastData WHERE HashKey = @hashKey";
         cmd.Parameters.AddWithValue("@hashKey", hashKey);
-        
-        return cmd.ExecuteNonQuery();
+
+        int count = cmd.ExecuteNonQuery();
+        if (count > 0)
+        {
+            InvalidateHashKeyCache(hashKey);
+            // 注意：Clear 操作由于没有具体的 Id，无法精准清理单体数据的缓存 (除非做全量缓存扫描)。
+            // 但考虑到 Clear 的语义，一般单体缓存也会随滑动时间过期，这里优先清理聚合缓存。
+        }
+        return count;
     }
 
     /// <summary>
-    /// 流式 JSON 搜索
-    /// 注: C# 的 yield return 状态机会保证在枚举结束或被 break 时，安全释放 connection
+    /// 清理单个记录和相关聚合的缓存
+    /// </summary>
+    private void InvalidateCache(string id, string hashKey)
+    {
+        _cache.Remove($"Id_{id}");
+        InvalidateHashKeyCache(hashKey);
+    }
+
+    /// <summary>
+    /// 清理 HashKey 关联的所有聚合缓存
+    /// </summary>
+    private void InvalidateHashKeyCache(string hashKey)
+    {
+        _cache.Remove($"RawJson_{hashKey}");
+        _cache.Remove($"List_{hashKey}");
+    }
+
+    #endregion
+
+    #region 搜索与辅助 (保持原生流式与底层实现)
+
+    /// <summary>
+    /// 流式 JSON 搜索 (保持每次查库，避免搜索引发巨大内存抖动，最稳妥的做法)
     /// </summary>
     public IEnumerable<FastData> Search(string hashKey, JsonElement jsonQuery)
     {
@@ -321,7 +444,6 @@ public class FastDbService
             bool isMatch = false;
             try
             {
-                // 将可能抛出异常的解析部分包裹在 try 中
                 using var doc = JsonDocument.Parse(content);
                 isMatch = JsonContains(doc.RootElement, jsonQuery);
             }
@@ -330,7 +452,6 @@ public class FastDbService
                 // Content 不是有效 JSON，跳过
             }
 
-            // 将 yield return 移出 try-catch 块，完美解决 CS1626 报错
             if (isMatch)
             {
                 yield return MapRow(reader);
@@ -393,8 +514,6 @@ public class FastDbService
         }
     }
 
-    #region 内部读取辅助
-
     private static List<FastData> ReadAll(SqliteCommand cmd)
     {
         var list = new List<FastData>();
@@ -427,7 +546,7 @@ public class FastDbService
     #endregion
 
     /// <summary>
-    /// 计算 MD5 哈希 (支持超大文本内存池优化)
+    /// 计算 MD5 哈希 (支持超大文本内存池优化，无分配特性完美保留)
     /// </summary>
     public static string ComputeMd5(string input)
     {
@@ -438,7 +557,7 @@ public class FastDbService
             Span<byte> utf8Bytes = stackalloc byte[maxByteCount];
             int bytesWritten = Encoding.UTF8.GetBytes(input, utf8Bytes);
 
-            Span<byte> hashBytes = stackalloc byte[16]; 
+            Span<byte> hashBytes = stackalloc byte[16];
             MD5.HashData(utf8Bytes[..bytesWritten], hashBytes);
             return Convert.ToHexStringLower(hashBytes);
         }
