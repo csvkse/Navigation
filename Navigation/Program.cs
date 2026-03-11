@@ -1,8 +1,9 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using Navigation;
 using Scalar.AspNetCore;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateSlimBuilder(args);
 
@@ -82,11 +83,13 @@ fastdb.MapGet("/{id}", (Guid id, string key, FastDbService db) =>
 });
 
 // JSON 内部字段搜索
-fastdb.MapPost("/search", (string key, JsonElement jsonQuery, FastDbService db) =>
+fastdb.MapPost("/search", ([FromQuery] string key, [FromBody] JsonElement jsonQuery, FastDbService db) =>
 {
     var hashKey = FastDbService.ComputeMd5(key);
     var list = db.Search(hashKey, jsonQuery);
-    return list.Select(ToResult).ToArray();
+
+    // 移除 .ToArray()，利用框架的流式序列化
+    return list.Select(ToResult);
 });
 
 // 新增数据
