@@ -77,9 +77,8 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         skipWaiting: true,
         clientsClaim: true,
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 将上限调至 5MB
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,png,svg,woff,woff2,ttf,eot,json,webmanifest}'],
-        // 针对 vite-ssg 的路由处理
         navigateFallback: '/index.html'
       }
     })
@@ -93,13 +92,13 @@ export default defineConfig({
     script: 'async',
     formatting: 'minify',
     includedRoutes(paths) {
-      // 1. 过滤掉包含 ':' (动态参数) 或 '?' (可选参数) 的非法路径
-      // 这些路径无法直接生成静态文档，必须要有具体的参数才能生成
+      // 1. 过滤掉包含 ':' (动态参数) 或 '?' (可选参数) 的非法模板路径（如 /:key?）
       const validPaths = paths.filter(p => !p.includes(':') && !p.includes('?'))
 
-      // 2. 手动添加你需要生成的具体页面
-      // 如果 /temp-note 页面在没有参数时也能访问，就手动加进去
-      return [...validPaths, '/tools/web-nav', '/temp-note']
+      // 2. 核心修改：移除旧的 '/tools/web-nav'，显式加入根路径 '/'
+      // 当没有传入 key 时，/ 就会渲染出默认的 WebNav 首页。
+      // 使用 Set 去重，防止 validPaths 中已经存在 '/' 或 '/temp-note' 导致重复渲染
+      return Array.from(new Set([...validPaths, '/', '/temp-note']))
     }
   }
 } as ViteSSGConfig)
