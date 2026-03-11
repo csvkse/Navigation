@@ -1574,7 +1574,7 @@ const handleCopyReadOnly = async () => {
     }
 
     const doCopy = (guid: string) => {
-        const url = `${window.location.origin}/tools/web-nav/${guid}`
+        const url = `${window.location.origin}/${guid}`
         navigator.clipboard.writeText(url)
         toast.success('Read-Only Link Copied!')
     }
