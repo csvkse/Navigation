@@ -416,6 +416,60 @@ public class FastDbService
 
     #endregion
 
+    #region Read-Only Anchor
+
+    /// <summary>
+    /// 获取给定 HashKey 下的 Read-Only Anchor GUID，如果没有则创建一个。
+    /// </summary>
+    public string GetOrCreateReadOnlyGuid(string hashKey)
+    {
+        string idToReturn = null;
+
+        using (var connection = new SqliteConnection(_connectionString))
+        {
+            connection.Open();
+
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "SELECT Id, Content FROM FastData WHERE HashKey = @hashKey";
+            cmd.Parameters.AddWithValue("@hashKey", hashKey);
+
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                var id = reader.GetString(0);
+                var content = reader.GetString(1);
+                if (content.Contains("\"type\":\"READ_ONLY_ANCHOR\""))
+                {
+                    idToReturn = id;
+                    break;
+                }
+            }
+        } // The reader and connection are disposed and closed here
+
+        if (idToReturn != null)
+        {
+            return idToReturn;
+        }
+
+        // 如果没有找到，创建一个新的
+        var newId = Guid.NewGuid().ToString();
+        var anchorContent = "{\"name\":\"System Read-Only Anchor\",\"url\":\"about:readonly\",\"type\":\"READ_ONLY_ANCHOR\",\"isApp\":false,\"description\":\"DO NOT DELETE. This record enables Read-Only access.\"}";
+
+        var entity = new FastData
+        {
+            Id = newId,
+            Content = anchorContent,
+            HashKey = hashKey,
+            CreateTime = DateTime.Now.ToString("o")
+        };
+        
+        Insert(entity);
+
+        return newId;
+    }
+
+    #endregion
+
     #region 搜索与辅助 (保持原生流式与底层实现)
 
     /// <summary>

@@ -1623,49 +1623,17 @@ const handleCopyReadOnly = async () => {
     let readKeyToUse = targetKeyObj.readOnlyKey
 
     try {
-        const res = await fetch(`${BASE_URL}/FastDB?key=u_${targetKey}`)
+        const res = await fetch(`${BASE_URL}/FastDB/readonly/guid?key=u_${targetKey}`)
+        if (!res.ok) throw new Error('Failed to fetch Read-Only GUID')
+
         const data = await res.json()
-        const items = data.map((i: any) => ({ ...i, content: safeParse(i.content) }))
+        const fetchedGuid = data.guid
 
-        const existingAnchor = items.find((i: any) => i.content?.type === 'READ_ONLY_ANCHOR')
-
-        if (existingAnchor) {
-            if (existingAnchor.id !== readKeyToUse) {
-                console.log('Fixing mismatch ReadOnly Key in Profile')
-                readKeyToUse = existingAnchor.id
-
-                const newKeys = currentUser.value.bookmarkKeys.map((k: any) => {
-                    if (k.key === targetKey) return { ...k, readOnlyKey: existingAnchor.id }
-                    return k
-                })
-
-                await updateUserProfile({
-                    ...currentUser.value,
-                    bookmarkKeys: newKeys
-                })
-            }
-            doCopy(readKeyToUse)
-            return
-        } else {
-            console.log('Anchor missing in DB, creating new one...')
-            const anchorContent = {
-                name: 'System Read-Only Anchor',
-                url: 'about:readonly',
-                type: 'READ_ONLY_ANCHOR',
-                isApp: false,
-                description: 'DO NOT DELETE. This record enables Read-Only access.'
-            }
-
-            const createRes = await fetch(`${BASE_URL}/FastDB?key=u_${targetKey}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(anchorContent)
-            })
-            const createData = await createRes.json()
-            const newId = createData.id
-
+        if (fetchedGuid && fetchedGuid !== readKeyToUse) {
+            console.log('Fixing mismatch ReadOnly Key in Profile')
+            readKeyToUse = fetchedGuid
             const newKeys = currentUser.value.bookmarkKeys.map((k: any) => {
-                if (k.key === targetKey) return { ...k, readOnlyKey: newId }
+                if (k.key === targetKey) return { ...k, readOnlyKey: fetchedGuid }
                 return k
             })
 
@@ -1673,11 +1641,9 @@ const handleCopyReadOnly = async () => {
                 ...currentUser.value,
                 bookmarkKeys: newKeys
             })
-
-            doCopy(newId)
-            return
         }
 
+        doCopy(fetchedGuid || readKeyToUse)
     } catch (e) {
         console.error('JIT ReadOnly Verification Failed', e)
         if (readKeyToUse) {

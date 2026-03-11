@@ -63,6 +63,14 @@ fastdb.MapGet("/", (string key, FastDbService db) =>
     return Results.Content(rawJson, "application/json");
 });
 
+// 获取指定 Key 的只读 GUID（如果没有则自动创建并返回）
+fastdb.MapGet("/readonly/guid", (string key, FastDbService db) =>
+{
+    var hashKey = FastDbService.ComputeMd5(key);
+    var guid = db.GetOrCreateReadOnlyGuid(hashKey);
+    return Results.Ok(new { guid = guid });
+});
+
 // 只读查询 - 通过 ID 的 GUID
 fastdb.MapGet("/readonly", (Guid readOnlyId, FastDbService db) =>
 {
