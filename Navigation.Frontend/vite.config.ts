@@ -48,9 +48,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['apple-touch-icon.png', 'logo.svg'],
       manifest: {
-        name: 'WebTool - 极简工具箱',
-        short_name: 'WebTool',
-        description: '一个功能丰富的网页版工具箱',
+        name: 'Navigation - 极简导航',
+        short_name: 'Navigation',
+        description: '一个功能丰富的网页版书签导航',
         theme_color: '#6366f1',
         background_color: '#ffffff',
         display: 'standalone',
