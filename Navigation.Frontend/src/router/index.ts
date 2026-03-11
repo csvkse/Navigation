@@ -4,7 +4,7 @@ export const routes: RouteRecordRaw[] = [
   // 将路径调整为根路径 /:key?，代替原来的 /tools/web-nav/:key?
   { 
     path: '/:key?', 
-    name: 'web-nav-home', 
+    name: 'web-nav', 
     component: () => import('@/views/Pages/Tools/WebNav.vue') 
   },
 ]
