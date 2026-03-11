@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-cmn-Hans">
+
+<head>
+  <script>
+    /**
+     * 第一优先级拦截：
+     * 背景色与主题预判，防止刷新过程中的白屏与颜色跳跃
+     */
+    (function () {
+      const p = window.location.pathname;
+      const s = window.location.search;
+
+      // 主题预判：尽可能早地应用深色模式，将精确颜色注入 CSS 变量
+      try {
+        const rawTheme = localStorage.getItem('theme-raw');
+        // 同时检查 WebNav 专用的主题存储
+        const webNavDay = localStorage.getItem('webnav_theme_day');
+        const webNavNight = localStorage.getItem('webnav_theme_night');
+        
+        const isDark = rawTheme === 'dark' || (!rawTheme && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        
+        if (isDark) {
+          document.documentElement.classList.add('dark');
+          // 根据 WebNav 的夜间主题 ID 预判背景色
+          const bgColor = (webNavNight === 'midnight-slate' || !webNavNight) ? '#09090b' : '#020617';
+          // 核心修复：注入 CSS 变量，而不是直接修改 style
+          document.documentElement.style.setProperty('--init-bg', bgColor);
+        } else {
+          const bgColor = (webNavDay === 'minimal') ? '#ffffff' : '#f8fafc';
+          // 核心修复：注入 CSS 变量
+          document.documentElement.style.setProperty('--init-bg', bgColor);
+        }
+      } catch (e) { }
+
+      const isQuery = s.indexOf('loading=true') > -1;
+      const isTempNoteDeep = p.indexOf('/temp-note/') > -1 && p.length > 11;
+      // 【修改点 1】修改 WebNav 深层链接的判断。
+      // 因为现在 WebNav 是首页 (/:key?)，深层链接变成了 /xxx 的形式。
+      // 我们需要排除根目录 '/' 以及其他确定的路由 (比如 /temp-note/)。
+      const isWebNavDeep = p !== '/' && p.indexOf('/temp-note/') === -1;
+      
+      // 携带特定 Key 参数且本地没有缓存时：进行全局硬拦截
+      if (isQuery || isWebNavDeep || isTempNoteDeep) {
+          let hasSpecificCache = false;
+          
+          // 增加 try-catch 保护，防止非法 URL 字符导致 decodeURIComponent 崩溃白屏
+          try {
+            if (isWebNavDeep) {
+               const key = decodeURIComponent(p.split('/').pop());
+               if (localStorage.getItem('webnav_cache_' + key)) hasSpecificCache = true;
+            }
+          } catch (e) {
+            console.warn('URL parsing failed during cache check', e);
+          }
+          
+          if (!hasSpecificCache) {
+            document.documentElement.setAttribute('data-app-loading', 'true');
+          }
+      }
+
+      // 数据预取：在 Vue JS 下载之前就开始请求 API 数据，消除骨架屏等待
+      try {
+        var prefetchKey = null;
+
+        // 1. 从 URL 提取 key（深层链接）
+        if (isWebNavDeep) {
+          try { prefetchKey = decodeURIComponent(p.split('/').pop()); } catch(e) {}
+        }
+
+        // 2. 从已登录用户提取 key
+        if (!prefetchKey) {
+          try {
+            var userStr = localStorage.getItem('webnav_user');
+            if (userStr && userStr !== 'null') {
+              var userData = JSON.parse(userStr);
+              if (userData && userData.dataKey) {
+                prefetchKey = 'u_' + userData.dataKey;
+              }
+            }
+          } catch(e) {}
+        }
+
+        // 开始预取（不阻塞页面，仅存储 Promise）
+        if (prefetchKey) {
+          var isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(prefetchKey);
+          var envApiBase = '%VITE_API_BASE_URL%';
+          var apiBase = (envApiBase && envApiBase.indexOf('%VITE_') === -1) ? envApiBase : '';
+          var apiUrl = isGuid
+            ? apiBase + '/FastDB/ReadOnly?ReadOnlyId=' + prefetchKey
+            : apiBase + '/FastDB?key=' + encodeURIComponent(prefetchKey);
+          
+          window.__PREFETCH__ = {
+            key: prefetchKey,
+            promise: fetch(apiUrl).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; })
+          };
+        }
+      } catch(e) {}
+
+      // 【修改点 2】拦截 SSG 预渲染内容逻辑适配。
+      // 替换掉之前写死的 '/tools/web-nav'。只要是首页、WebNav 的深层链接或者 temp-note 就执行拦截。
+      if (p === '/' || isWebNavDeep || p.indexOf('/temp-note') > -1) {
+        try {
+          const user = localStorage.getItem('webnav_user');
+          const publicCache = localStorage.getItem('webnav_cache_public');
+          let hasAnyCache = !!user || !!publicCache;
+
+          if (!hasAnyCache) {
+            for (let i = 0; i < localStorage.length; i++) {
+              if (localStorage.key(i).indexOf('webnav_cache_') === 0) {
+                hasAnyCache = true; break;
+              }
+            }
+          }
+
+          if (hasAnyCache) {
+            document.documentElement.setAttribute('data-app-session', 'true');
+          }
+        } catch (e) { }
+      }
+
+      // 标题预判：提前恢复上次的标题，防止标题闪烁
+      try {
+        var savedTitle = localStorage.getItem('webnav_page_title');
+        if (savedTitle) {
+          document.title = savedTitle;
+        }
+      } catch (e) { }
+    })();
+  </script>
+  <style>
+    /* 物理消除白屏：强制 html/body 背景色优先读取 JS 注入的 CSS 变量 */
+    html,
+    body {
+      background-color: var(--init-bg, #09090b);
+      margin: 0;
+      padding: 0;
+    }
+
+    html:not(.dark),
+    html:not(.dark) body {
+      background-color: var(--init-bg, #ffffff);
+    }
+
+    /* SSG 水合拦截：隐藏预渲染的无效内容，Vue 用缓存渲染后立即移除 */
+    html[data-app-session="true"] #app {
+      visibility: hidden !important;
+    }
+
+    /* 极致拦截：只要处于加载态，物理隐藏 Vue 的入口容器 */
+    html[data-app-loading="true"] #app {
+      display: none !important;
+      opacity: 0 !important;
+    }
+
+    /* 全屏原生遮罩：唯一的转圈指示器 */
+    #global-ssg-loader {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 999999;
+      background: var(--init-bg, #09090b); /* 同步遮罩背景色 */
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+    }
+
+    html[data-app-loading="true"] #global-ssg-loader {
+      display: flex;
+    }
+
+    .spinner-ring {
+      width: 48px;
+      height: 48px;
+      border: 4px solid rgba(255, 255, 255, 0.05);
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+
+    /* 浅色模式下的 Loader 颜色适配 */
+    html:not(.dark) .spinner-ring {
+      border-color: rgba(0, 0, 0, 0.05);
+      border-top-color: #3b82f6;
+    }
+
+    .loading-text {
+      color: white;
+      font-family: sans-serif;
+      font-weight: 900;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      font-size: 12px;
+      opacity: 0.3;
+    }
+
+    html:not(.dark) .loading-text {
+      color: black;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @keyframes pulse {
+      0%,
+      100% {
+        opacity: 0.3;
+      }
+      50% {
+        opacity: 0.7;
+      }
+    }
+  </style>
+
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1" />
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#6366f1" />
+  <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <title>WebTool</title>
+
+</head>
+
+<body>
+  <div id="global-ssg-loader">
+    <div class="spinner-ring"></div>
+    <div class="loading-text">Loading Data</div>
+  </div>
+
+  <div id="app"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+
+</html>
