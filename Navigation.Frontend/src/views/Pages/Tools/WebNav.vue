@@ -1573,11 +1573,52 @@ const handleCopyReadOnly = async () => {
         return
     }
 
-    const doCopy = (guid: string) => {
-        const url = `${window.location.origin}/${guid}`
-        navigator.clipboard.writeText(url)
-        toast.success('Read-Only Link Copied!')
-    }
+    const doCopy = async (guid: string) => {
+        const url = `${window.location.origin}/${guid}`;
+
+        // 1. 优先尝试现代 API (Clipboard API)
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            try {
+                await navigator.clipboard.writeText(url);
+                toast.success('Read-Only Link Copied!');
+            } catch (err) {
+                console.error('Clipboard API failed:', err);
+                toast.error('Failed to copy link');
+            }
+            return; // 提前返回，不再执行后续降级逻辑
+        }
+
+        // 2. 降级方案 (Fallback: execCommand)
+        const textArea = document.createElement("textarea");
+        textArea.value = url;
+
+        // 隐藏 textarea，防止页面抖动和视图滚动
+        textArea.style.position = 'fixed';
+        textArea.style.top = '-9999px';
+        textArea.style.left = '-9999px';
+        // 防止在某些 iOS 浏览器中触发只读状态下的键盘
+        textArea.setAttribute('readonly', '');
+
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+
+        try {
+            // execCommand 会返回一个布尔值表示是否成功
+            const successful = document.execCommand('copy');
+            if (successful) {
+                toast.success('Read-Only Link Copied!');
+            } else {
+                toast.error('Failed to copy link');
+            }
+        } catch (err) {
+            console.error('Fallback copy failed:', err);
+            toast.error('Failed to copy link');
+        } finally {
+            // 无论成功与否，确保清理 DOM
+            document.body.removeChild(textArea);
+        }
+    };
 
     let readKeyToUse = targetKeyObj.readOnlyKey
 
