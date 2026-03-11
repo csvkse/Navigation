@@ -5,7 +5,7 @@
   "id": "2zBlHPUA6E",
   "author": "setube",
   "private": true,
-  "version": "1.2.31",
+  "version": "1.2.32",
   "type": "module",
   "scripts": {
     "dev": "vite --port 25121",
