@@ -36,6 +36,20 @@ docker pull ghcr.io/csvkse/navigation:main
 docker run -d --name navigation -p 8080:8080 -v navigation-data:/app/data ghcr.io/csvkse/navigation:main
 ```
 
+### Docker Update
+
+```bash
+# Pull the latest image
+docker pull ghcr.io/csvkse/navigation:main
+
+# Stop and remove the old container
+docker stop navigation
+docker rm navigation
+
+# Run the new container
+docker run -d --name navigation -p 8080:8080 -v navigation-data:/app/data ghcr.io/csvkse/navigation:main
+```
+
 ### Running the Executable
 
 Go to the [GitHub Releases](https://github.com/csvkse/Navigation/releases) page of the project and download the executable archive for your platform (Windows/Linux, etc.). Since the backend is compiled with AOT (Ahead-of-Time), you can run the main program directly after extracting it, without needing to install the .NET runtime environment on your system.
