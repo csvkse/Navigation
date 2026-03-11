@@ -436,9 +436,11 @@ public class FastDbService
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
-                var id = reader.GetString(0);
-                var content = reader.GetString(1);
-                if (content.Contains("\"type\":\"READ_ONLY_ANCHOR\""))
+                // 安全地读取，防止数据库中该字段为空导致抛出异常
+                var id = reader.IsDBNull(0) ? null : reader.GetString(0);
+                var content = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+
+                if (!string.IsNullOrEmpty(content) && content.Contains("\"type\":\"READ_ONLY_ANCHOR\""))
                 {
                     idToReturn = id;
                     break;

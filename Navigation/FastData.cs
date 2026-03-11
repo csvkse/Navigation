@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Navigation;
 
 /// <summary>
@@ -23,3 +25,6 @@ public class FastDataResult
     public string CreateTime { get; set; } = string.Empty;
     public string? UpdateTime { get; set; }
 }
+
+
+public record GuidResponse([property: JsonPropertyName("guid")] string Guid);

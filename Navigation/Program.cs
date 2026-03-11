@@ -68,7 +68,7 @@ fastdb.MapGet("/readonly/guid", (string key, FastDbService db) =>
 {
     var hashKey = FastDbService.ComputeMd5(key);
     var guid = db.GetOrCreateReadOnlyGuid(hashKey);
-    return Results.Ok(new { guid = guid });
+    return Results.Ok(new GuidResponse(guid));
 });
 
 // 只读查询 - 通过 ID 的 GUID

@@ -17,6 +17,7 @@ namespace Navigation;
 [JsonSerializable(typeof(IEnumerable<FastDataResult>))]
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(Dictionary<string, JsonElement>))]
+[JsonSerializable(typeof(GuidResponse))]
 public partial class AppJsonSerializerContext : JsonSerializerContext
 {
 }
