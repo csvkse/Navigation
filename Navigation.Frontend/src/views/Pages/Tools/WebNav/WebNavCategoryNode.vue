@@ -25,11 +25,16 @@
             <!-- 1. 当前层级的直接书签 -->
             <div v-if="visibleLinks.length > 0" class="space-y-1.5">
                 <div v-for="link in visibleLinks" :key="link.id" draggable="true"
-                    @dragstart="$emit('drag-start', $event, link)" @dragend="$emit('drag-end')" @dragover.prevent
-                    @drop.stop="$emit('drop', $event, link)"
+                    @dragstart="$emit('drag-start', $event, link)" @dragend="$emit('drag-end')"
+                    @dragover.prevent="handleLinkDragOver($event, link)"
+                    @dragleave="handleLinkDragLeave"
+                    @drop.stop="handleLinkDrop($event, link)"
                     class="group relative flex items-center gap-2.5 p-1.5 transition-all duration-150 cursor-pointer bookmark-item"
                     :class="[
                         draggingId === link.id ? 'dragging' : '',
+                        dragOverLinkState?.id === link.id
+                            ? (dragOverLinkState.position === 'before' ? 'drag-insert-before' : 'drag-insert-after')
+                            : '',
                         `theme-${layoutScheme}-item`
                     ]" :data-color="link.content.color" :style="{ '--cyber-color': link.content.color || undefined }">
 
@@ -110,7 +115,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from '@/composables/useI18n'
 import { Button } from '@/components/ui/button'
 import { GripVertical, Edit2, Trash2, Bookmark, ChevronDown, ChevronUp, ChevronRight, Folder } from 'lucide-vue-next'
@@ -163,6 +168,7 @@ const emit = defineEmits<{
 const isCollapsed = ref(props.depth > 0) // 子级默认折叠
 const isLimitExpanded = ref(false)
 const dragOverCategory = ref<string | null>(null)
+const dragOverLinkState = ref<{ id: string; position: 'before' | 'after' } | null>(null)
 
 const toggleCollapse = () => {
     isCollapsed.value = !isCollapsed.value
@@ -180,6 +186,35 @@ const handleDropFolder = (e: DragEvent, path: string) => {
     dragOverCategory.value = null
     emit('drop-folder', e, path)
 }
+
+const handleLinkDragOver = (e: DragEvent, link: Link) => {
+    const el = e.currentTarget as HTMLElement
+    const y = e.clientY - el.getBoundingClientRect().top
+    dragOverLinkState.value = {
+        id: link.id,
+        position: y < el.getBoundingClientRect().height / 2 ? 'before' : 'after'
+    }
+}
+
+const handleLinkDragLeave = (e: DragEvent) => {
+    const relatedTarget = e.relatedTarget as Node | null
+    if (relatedTarget && (e.currentTarget as HTMLElement).contains(relatedTarget)) return
+    dragOverLinkState.value = null
+}
+
+const handleLinkDrop = (e: DragEvent, link: Link) => {
+    const insertAfter = dragOverLinkState.value?.position === 'after'
+    dragOverLinkState.value = null
+    const target = insertAfter
+        ? { ...link, content: { ...link.content, _insertAfter: true } }
+        : link
+    emit('drop', e, target)
+}
+
+// Clear indicator when drag ends (draggingId becomes null)
+watch(() => props.draggingId, (val) => {
+    if (!val) dragOverLinkState.value = null
+})
 
 // 计算
 const visibleLinks = computed(() => {
@@ -233,5 +268,15 @@ export default {
 .dragging {
     opacity: 0.5;
     scale: 0.98;
+}
+
+.drag-insert-before {
+    box-shadow: inset 0 3px 0 hsl(var(--primary));
+    background: linear-gradient(to bottom, hsl(var(--primary) / 0.08) 0%, transparent 50%);
+}
+
+.drag-insert-after {
+    box-shadow: inset 0 -3px 0 hsl(var(--primary));
+    background: linear-gradient(to top, hsl(var(--primary) / 0.08) 0%, transparent 50%);
 }
 </style>

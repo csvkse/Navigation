@@ -3,11 +3,14 @@
         <!-- Node Header Row -->
         <tr class="hover:bg-muted/10 transition-colors group/row border-b border-border/10" :class="[
             depth === 0 ? 'bg-muted/5' : '',
-            draggingId === 'folder:' + node.fullPath ? 'opacity-30 bg-primary/5' : ''
-        ]" draggable="true"
+            draggingId === 'folder:' + node.fullPath ? 'opacity-30 bg-primary/5' : '',
+            folderDragState === 'before' ? 'drag-before' : '',
+            folderDragState === 'after' ? 'drag-after' : ''
+        ]"
+        draggable="true"
             @dragstart.stop="$emit('drag-start', $event, { id: 'folder:' + node.fullPath, content: { isCategory: true, category: node.fullPath, name: node.name } } as any)"
             @dragend.stop="$emit('drag-end')" @dragover.prevent="handleFolderDragOver($event)"
-            @drop.stop="handleFolderDrop($event, node)">
+            @dragleave.stop="handleFolderDragLeave" @drop.stop="handleFolderDrop($event, node)">
             <td class="p-4 pl-4" :style="{ paddingLeft: `${(depth * 1.5) + 1}rem` }">
                 <div class="flex items-center gap-2 relative">
                     <!-- Tree line decoration -->
@@ -24,6 +27,11 @@
                     <div class="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                         <Folder class="h-4 w-4 text-primary" />
                     </div>
+                    <!-- Insertion direction badge -->
+                    <span v-if="folderDragState"
+                          class="text-[10px] font-bold text-primary bg-primary/15 border border-primary/30 px-1.5 py-0.5 rounded leading-none shrink-0 select-none">
+                        {{ folderDragState === 'before' ? '↑ 前' : '↓ 后' }}
+                    </span>
                 </div>
             </td>
             <td class="p-4" colspan="6">
@@ -159,7 +167,8 @@
             <!-- Subfolders -->
             <template v-for="subNode in sortedChildren" :key="subNode.fullPath">
                 <WebNavManageTreeNode :node="subNode" :depth="depth + 1" :dragging-id="draggingId"
-                    :category-order="categoryOrder" @drag-start="(e: DragEvent, l: Link) => $emit('drag-start', e, l)"
+                    :category-order="categoryOrder" :sibling-paths="sortedChildren.map((n) => n.fullPath)"
+                    @drag-start="(e: DragEvent, l: Link) => $emit('drag-start', e, l)"
                     @drag-end="$emit('drag-end')" @drop="(e: DragEvent, l: Link) => $emit('drop', e, l)"
                     @edit-link="(l: Link) => $emit('edit-link', l)"
                     @delete-link="(id: string) => $emit('delete-link', id)"
@@ -208,6 +217,7 @@ interface Props {
     depth: number
     draggingId: string | null
     categoryOrder?: Record<string, number>
+    siblingPaths?: string[]
 }
 
 const props = defineProps<Props>()
@@ -242,34 +252,33 @@ const sortedChildren = computed(() => {
     return keys.map(k => props.node.children[k]!)
 })
 
-// Drag and drop for folder sorting
-let dragOverQuadrant = 0 // 1: top, 2: bottom
+let dragOverQuadrant = 0
+const folderDragState = ref<'before' | 'after' | null>(null)
 
 const handleFolderDragOver = (e: DragEvent) => {
     const target = e.currentTarget as HTMLElement
     const rect = target.getBoundingClientRect()
     const y = e.clientY - rect.top
     dragOverQuadrant = y < rect.height / 2 ? 1 : 2
+    folderDragState.value = dragOverQuadrant === 1 ? 'before' : 'after'
+}
 
-    // Add visual feedback
-    target.style.borderTop = dragOverQuadrant === 1 ? '2px solid hsl(var(--primary))' : ''
-    target.style.borderBottom = dragOverQuadrant === 2 ? '2px solid hsl(var(--primary))' : ''
+const handleFolderDragLeave = (e: DragEvent) => {
+    const relatedTarget = e.relatedTarget as Node | null
+    if (relatedTarget && (e.currentTarget as HTMLElement).contains(relatedTarget)) return
+    folderDragState.value = null
 }
 
 const handleFolderDrop = (e: DragEvent, node: CategoryNode) => {
-    const targetEl = e.currentTarget as HTMLElement
-    targetEl.style.borderTop = ''
-    targetEl.style.borderBottom = ''
+    folderDragState.value = null
 
     const sourceId = e.dataTransfer?.getData('text/plain')
     if (sourceId?.startsWith('folder:')) {
         const sourcePath = sourceId.substring(7)
-        if (sourcePath === node.fullPath) return // Dropped on itself
+        if (sourcePath === node.fullPath) return
 
-        // Prevent sorting dropping inside its own children (already checked in folder move, but good to ensure order holds)
         if (node.fullPath.startsWith(sourcePath + ' /')) return
 
-        // We only allow sorting within the SAME parent folder level for simplicity
         const parentOfSource = sourcePath.includes(' / ') ? sourcePath.substring(0, sourcePath.lastIndexOf(' / ')) : ''
         const parentOfTarget = node.fullPath.includes(' / ') ? node.fullPath.substring(0, node.fullPath.lastIndexOf(' / ')) : ''
 
@@ -277,33 +286,30 @@ const handleFolderDrop = (e: DragEvent, node: CategoryNode) => {
             e.preventDefault()
             e.stopPropagation()
 
-            // Generate new order
             const currentOrder = { ...props.categoryOrder }
+            const siblings = props.siblingPaths ?? []
 
-            // Get all siblings in current sorted order
-            if (parentOfTarget === '') {
-                // Root level
-                // We'd have to access the global roots list to sort accurately, but we can just use the provided categoryOrder
-            }
-
-            // A simpler approach: just assign a sort index based on the target
-            const targetSortIndex = currentOrder[node.fullPath] ?? 999999
-            let newSortIndex = targetSortIndex
-
-            if (dragOverQuadrant === 1) {
-                newSortIndex -= 0.5
+            if (siblings.length > 0) {
+                // Rebuild full sibling order then splice source into correct position
+                const ordered = siblings.filter(p => p !== sourcePath)
+                const targetIdx = ordered.indexOf(node.fullPath)
+                const insertAt = dragOverQuadrant === 1 ? targetIdx : targetIdx + 1
+                ordered.splice(Math.max(0, insertAt), 0, sourcePath)
+                ordered.forEach((path, idx) => {
+                    currentOrder[path] = idx * 10
+                })
             } else {
-                newSortIndex += 0.5
+                const targetSortIndex = currentOrder[node.fullPath] ?? 0
+                currentOrder[sourcePath] = dragOverQuadrant === 1
+                    ? targetSortIndex - 0.5
+                    : targetSortIndex + 0.5
             }
-
-            currentOrder[sourcePath] = newSortIndex
 
             emit('update-category-order', currentOrder)
             return
         }
     }
 
-    // If not handled as a sibling sort, pass onto normal drop (folder move inside)
     emit('drop', e, { content: { isApp: false, category: node.fullPath } } as unknown as Link)
 }
 
@@ -339,3 +345,17 @@ export default {
     name: 'WebNavManageTreeNode'
 }
 </script>
+
+<style scoped>
+/* Insert-before: thick blue line at top + gradient fade down */
+tr.drag-before > td {
+    box-shadow: inset 0 3px 0 hsl(var(--primary));
+    background: linear-gradient(to bottom, hsl(var(--primary) / 0.12) 0%, transparent 55%);
+}
+
+/* Insert-after: thick blue line at bottom + gradient fade up */
+tr.drag-after > td {
+    box-shadow: inset 0 -3px 0 hsl(var(--primary));
+    background: linear-gradient(to top, hsl(var(--primary) / 0.12) 0%, transparent 55%);
+}
+</style>

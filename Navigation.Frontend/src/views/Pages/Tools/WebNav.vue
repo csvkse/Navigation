@@ -1030,24 +1030,39 @@ const handleDrop = async (e: DragEvent, target: any) => {
     if (draggingId.value && sourceId && sourceId !== target.id && !isReadOnly.value && !sourceId.startsWith('folder:')) {
         const source = links.value.find(l => l.id === sourceId)
         if (source) {
+            const targetCategory = target.content.category !== undefined ? target.content.category : source.content.category
+            const targetIsApp = target.content.isApp !== undefined ? !!target.content.isApp : source.content.isApp
+
+            source.content.isApp = targetIsApp
+            source.content.category = targetCategory
             if (target.content.isApplied !== undefined) {
                 source.content.isApplied = target.content.isApplied
             } else {
                 source.content.isApplied = true
             }
 
-            source.content.isApp = target.content.isApp !== undefined ? !!target.content.isApp : source.content.isApp
-            source.content.category = target.content.category !== undefined ? target.content.category : source.content.category
-            source.content.sortIndex = (target.content.sortIndex || 0) - 1
+            // Reorder entire target bucket so sortIndex values are always clean and precise
+            const bucket = links.value
+                .filter(l => l.id !== source.id &&
+                             (l.content.category || '') === (targetCategory || '') &&
+                             !!l.content.isApp === targetIsApp)
+                .sort((a, b) => (a.content.sortIndex || 0) - (b.content.sortIndex || 0))
+
+            const targetIdx = bucket.findIndex(l => l.id === target.id)
+            const insertAfter = !!(target.content as any)._insertAfter
+            const insertAt = targetIdx >= 0 ? targetIdx + (insertAfter ? 1 : 0) : bucket.length
+            bucket.splice(insertAt, 0, source)
+            bucket.forEach((l, i) => { l.content.sortIndex = i * 10 })
 
             links.value = [...links.value]
             updateCache()
 
             try {
-                await fetch(`${BASE_URL}/FastDB/${source.id}?key=${encodeURIComponent(currentKey.value)}`, {
+                const bulkItems = bucket.map(l => ({ id: l.id, content: { ...l.content } }))
+                await fetch(`${BASE_URL}/FastDB/bulk?key=${encodeURIComponent(currentKey.value)}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(source.content)
+                    body: JSON.stringify(bulkItems)
                 })
                 toast.success(t('tools.webNav.moved'))
                 fetchData(true)

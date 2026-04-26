@@ -37,6 +37,7 @@
                         <template v-for="(node, rootKey) in treeNodes" :key="rootKey">
                             <WebNavManageTreeNode :node="node" :depth="0" :dragging-id="draggingId"
                                 :category-order="categoryOrder"
+                                :sibling-paths="Object.values(treeNodes).map((n) => n.fullPath)"
                                 @drag-start="(e: DragEvent, l: Link) => $emit('drag-start', e, l)"
                                 @drag-end="$emit('drag-end')" @drop="(e: DragEvent, l: Link) => $emit('drop', e, l)"
                                 @edit-link="(l: Link) => $emit('edit-link', l)"
